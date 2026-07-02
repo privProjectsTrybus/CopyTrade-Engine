@@ -1,0 +1,516 @@
+// ============================================================
+// CopyTrade Engine — Prisma Schema (Stage 1: Auth + Core Data Model)
+// Database: PostgreSQL (designed for free-tier hosts: Neon / Supabase)
+// ============================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ----------------------------------------------------------------
+// AUTH (NextAuth standard models + extensions for 2FA / risk)
+// ----------------------------------------------------------------
+
+model User {
+  id              String    @id @default(cuid())
+  name            String?
+  email           String?   @unique
+  emailVerified   DateTime?
+  image           String?
+  passwordHash    String? // null for OAuth-only users
+  role            Role      @default(USER)
+  status          UserStatus @default(ACTIVE)
+
+  // 2FA
+  twoFactorEnabled Boolean  @default(false)
+  twoFactorSecret  String? // encrypted at rest, never returned to client
+
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  accounts        Account[]
+  sessions        Session[]
+  exchangeConnections ExchangeConnection[]
+  copyRelationships   CopyRelationship[]
+  riskProfile     RiskProfile?
+  trades          Trade[]
+  openPositions   OpenPosition[]
+  closedPositions ClosedPosition[]
+  notifications   Notification[]
+  auditLogs       AuditLog[]
+  trustedDevices  TrustedDevice[]
+  aiStrategies    AiStrategy[]
+  notificationSettings NotificationSettings?
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  PENDING_VERIFICATION
+}
+
+// Standard NextAuth models
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+// "Remember this device" support, separate from NextAuth sessions
+model TrustedDevice {
+  id          String   @id @default(cuid())
+  userId      String
+  deviceHash  String // hashed fingerprint, never raw UA/IP combo stored plainly
+  label       String?
+  lastSeenAt  DateTime @default(now())
+  expiresAt   DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, deviceHash])
+}
+
+// ----------------------------------------------------------------
+// EXCHANGE CONNECTIONS
+// ----------------------------------------------------------------
+
+enum ExchangeName {
+  BINANCE
+  BYBIT
+}
+
+model ExchangeConnection {
+  id              String       @id @default(cuid())
+  userId          String
+  exchange        ExchangeName
+  label           String? // user-friendly nickname
+
+  // Credentials are stored as AES-256-GCM ciphertext (see src/lib/crypto.ts).
+  // Raw keys NEVER touch the database or logs unencrypted.
+  encryptedApiKey    String
+  encryptedApiSecret String
+  encryptionIv       String
+  encryptionTag       String
+
+  // Read-only flags derived at connect-time from exchange permission check.
+  hasWithdrawPermission Boolean @default(false) // should always be false; flagged in UI if true
+  hasTradePermission    Boolean @default(false)
+  hasReadPermission     Boolean @default(false)
+
+  isActive        Boolean  @default(true)
+  lastSyncedAt    DateTime?
+  lastSyncError   String?
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  copyRelationships CopyRelationship[]
+  trades          Trade[]
+  openPositions   OpenPosition[]
+  closedPositions ClosedPosition[]
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------
+// TRADERS (the accounts being copied — could be curated/mock initially)
+// ----------------------------------------------------------------
+
+model TraderProfile {
+  id             String   @id @default(cuid())
+  displayName    String
+  avatarUrl      String?
+  bio            String?
+  exchange       ExchangeName
+  tradingStyle   TradingStyle
+  riskScore      Int      @default(50) // 0-100, lower = safer
+  specialties    String[] // e.g. ["BTC", "ETH", "SOL"]
+  isVerified     Boolean  @default(false)
+  isActive       Boolean  @default(true)
+
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  statistics        TraderStatistics?
+  copyRelationships CopyRelationship[]
+  signals           TraderSignal[]
+}
+
+// Represents a trader's current open positions used as copy signals.
+// Updated by the seed / future real integrations.
+model TraderSignal {
+  id              String   @id @default(cuid())
+  traderProfileId String
+  symbol          String
+  side            TradeSide
+  size            Float
+  entryPrice      Float
+  leverage        Float    @default(1)
+  stopLossPrice   Float?
+  takeProfitPrice Float?
+  isOpen          Boolean  @default(true)
+
+  openedAt        DateTime @default(now())
+  closedAt        DateTime?
+
+  traderProfile   TraderProfile @relation(fields: [traderProfileId], references: [id], onDelete: Cascade)
+
+  @@index([traderProfileId, isOpen])
+}
+
+enum TradingStyle {
+  FUTURES_SCALPER
+  FUTURES_SWING
+  SPOT_SWING
+  SPOT_LONG_TERM
+}
+
+model TraderStatistics {
+  id              String   @id @default(cuid())
+  traderProfileId String   @unique
+
+  winRate         Float    @default(0)
+  roi30d          Float    @default(0)
+  roi90d          Float    @default(0)
+  roi1y           Float    @default(0)
+  avgLeverage     Float    @default(1)
+  followerCount   Int      @default(0)
+  maxDrawdown     Float    @default(0)
+  avgHoldingHours Float    @default(0)
+  // Array of {month: "2024-01", roi: 4.2} sorted ascending
+  monthlyReturns  Json     @default("[]")
+
+  updatedAt       DateTime @updatedAt
+
+  traderProfile   TraderProfile @relation(fields: [traderProfileId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------
+// COPY RELATIONSHIPS + RISK
+// ----------------------------------------------------------------
+
+model CopyRelationship {
+  id                   String   @id @default(cuid())
+  userId               String
+  traderProfileId      String
+  exchangeConnectionId String
+
+  isActive             Boolean  @default(true)
+
+  // Capital allocation
+  allocationType       AllocationType @default(FIXED_AMOUNT)
+  allocationValue      Float // dollar amount OR percentage, interpreted via allocationType
+
+  // Position sizing
+  sizingMode           SizingMode @default(SCALED_MIRROR)
+  riskMultiplier        Float      @default(1.0) // 0.25, 0.5, 1, 1.5, 2
+
+  maxPositionSize      Float?
+  maxLeverage          Float?
+  allowedSymbols       String[] // whitelist; empty = all allowed
+  blockedSymbols       String[] // blacklist
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  traderProfile      TraderProfile      @relation(fields: [traderProfileId], references: [id], onDelete: Cascade)
+  exchangeConnection ExchangeConnection @relation(fields: [exchangeConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([traderProfileId])
+}
+
+enum AllocationType {
+  FIXED_AMOUNT
+  PERCENTAGE_OF_ACCOUNT
+}
+
+enum SizingMode {
+  EXACT_MIRROR
+  SCALED_MIRROR
+  FIXED_DOLLAR
+}
+
+model RiskProfile {
+  id                  String   @id @default(cuid())
+  userId              String   @unique
+
+  maxAccountExposurePct Float  @default(30)
+  maxTradeRiskPct       Float  @default(1)
+  maxDailyLossPct        Float  @default(3)
+  maxWeeklyLossPct       Float  @default(7)
+  maxMonthlyLossPct      Float  @default(12)
+  maxOpenPositions       Int    @default(10)
+
+  isPaused             Boolean  @default(false) // set true automatically when a limit is breached
+  pausedReason         String?
+  pausedAt             DateTime?
+
+  updatedAt            DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------
+// TRADES / POSITIONS
+// ----------------------------------------------------------------
+
+enum TradeSide {
+  LONG
+  SHORT
+}
+
+enum TradeStatus {
+  PENDING
+  OPEN
+  CLOSED
+  FAILED
+  REJECTED_BY_RISK_ENGINE
+}
+
+model Trade {
+  id                   String      @id @default(cuid())
+  userId               String
+  exchangeConnectionId String
+  copyRelationshipId   String?
+
+  symbol               String
+  side                 TradeSide
+  status               TradeStatus @default(PENDING)
+
+  requestedSize        Float
+  executedSize         Float?
+  entryPrice           Float?
+  stopLossPrice        Float?
+  takeProfitPrice      Float?
+
+  failureReason        String?
+
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exchangeConnection ExchangeConnection @relation(fields: [exchangeConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+}
+
+model OpenPosition {
+  id                   String   @id @default(cuid())
+  userId               String
+  exchangeConnectionId String
+
+  symbol               String
+  side                 TradeSide
+  size                 Float
+  entryPrice           Float
+  markPrice            Float?
+  leverage             Float    @default(1)
+  unrealizedPnl        Float    @default(0)
+  stopLossPrice        Float?
+  takeProfitPrice      Float?
+
+  openedAt             DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exchangeConnection ExchangeConnection @relation(fields: [exchangeConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model ClosedPosition {
+  id                   String   @id @default(cuid())
+  userId               String
+  exchangeConnectionId String
+
+  symbol               String
+  side                 TradeSide
+  size                 Float
+  entryPrice           Float
+  exitPrice            Float
+  realizedPnl          Float
+  leverage             Float    @default(1)
+
+  openedAt             DateTime
+  closedAt             DateTime @default(now())
+
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exchangeConnection ExchangeConnection @relation(fields: [exchangeConnectionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ----------------------------------------------------------------
+// NOTIFICATIONS + AUDIT
+// ----------------------------------------------------------------
+
+enum NotificationChannel {
+  BROWSER
+  EMAIL
+  TELEGRAM
+  DISCORD
+}
+
+model Notification {
+  id        String               @id @default(cuid())
+  userId    String
+  channel   NotificationChannel
+  title     String
+  body      String
+  isRead    Boolean              @default(false)
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  userId    String?
+  action    String // e.g. "EXCHANGE_CONNECTED", "RISK_LIMIT_BREACHED", "LOGIN_FAILED"
+  metadata  Json?
+  ipHash    String? // hashed, not raw IP
+  createdAt DateTime @default(now())
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+}
+
+// ----------------------------------------------------------------
+// AI TRADING MODULE (Stage 3)
+// ----------------------------------------------------------------
+
+enum ApprovalMode {
+  FULL_AUTO    // executes immediately on signal
+  SEMI_AUTO    // executes unless user rejects within 60s
+  MANUAL       // queues for explicit user approval
+}
+
+enum StrategyType {
+  TREND_FOLLOWING
+  MOMENTUM
+  BREAKOUT
+  MEAN_REVERSION
+}
+
+enum AiSignalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+  EXECUTED
+}
+
+model AiStrategy {
+  id              String       @id @default(cuid())
+  userId          String
+  name            String
+  strategyType    StrategyType
+  isActive        Boolean      @default(false)
+  approvalMode    ApprovalMode @default(MANUAL)
+  allocationPct   Float        @default(10)  // % of wallet for this strategy
+  maxLeverage     Float        @default(3)
+  symbols         String[]     // whitelist; empty = all major pairs
+  parametersJson  Json         @default("{}") // strategy-specific tuning params
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  signals         AiSignal[]
+  user            User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model AiSignal {
+  id              String        @id @default(cuid())
+  aiStrategyId    String
+  symbol          String
+  side            TradeSide
+  confidence      Float         // 0-1
+  entryPrice      Float
+  stopLossPrice   Float
+  takeProfitPrice Float
+  leverage        Float         @default(1)
+  rationale       String        // human-readable explanation of why the strategy fired
+  status          AiSignalStatus @default(PENDING)
+  expiresAt       DateTime
+  executedAt      DateTime?
+
+  createdAt       DateTime @default(now())
+
+  strategy        AiStrategy @relation(fields: [aiStrategyId], references: [id], onDelete: Cascade)
+}
+
+// ----------------------------------------------------------------
+// NOTIFICATION SETTINGS (Stage 3)
+// ----------------------------------------------------------------
+
+model NotificationSettings {
+  id                String  @id @default(cuid())
+  userId            String  @unique
+
+  browserEnabled    Boolean @default(true)
+  emailEnabled      Boolean @default(false)
+  telegramEnabled   Boolean @default(false)
+  telegramChatId    String?
+  discordEnabled    Boolean @default(false)
+  discordWebhookUrl String?
+
+  // Which events to notify on
+  onTradeOpen       Boolean @default(true)
+  onTradeClose      Boolean @default(true)
+  onStopLossHit     Boolean @default(true)
+  onRiskBreach      Boolean @default(true)
+  onExchangeError   Boolean @default(true)
+  onAiSignal        Boolean @default(true)
+
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

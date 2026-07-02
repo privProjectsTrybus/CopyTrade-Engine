@@ -1,0 +1,22 @@
+{
+  "framework": "nextjs",
+  "functions": {
+    "src/app/api/portfolio/analytics/route.ts": { "maxDuration": 30 },
+    "src/app/api/admin/**": { "maxDuration": 20 }
+  },
+  "crons": [
+    {
+      "path": "/api/cron/expire-signals",
+      "schedule": "*/15 * * * *"
+    }
+  ],
+  "headers": [
+    {
+      "source": "/api/exchange/credentials",
+      "headers": [
+        { "key": "Cache-Control", "value": "no-store, no-cache, must-revalidate" },
+        { "key": "Pragma", "value": "no-cache" }
+      ]
+    }
+  ]
+}
