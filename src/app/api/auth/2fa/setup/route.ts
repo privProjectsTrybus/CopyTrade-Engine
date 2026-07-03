@@ -1,6 +1,6 @@
 // src/app/api/auth/2fa/setup/route.ts
 import { NextResponse } from "next/server";
-import { authenticator } from "otplib";
+import { authenticator } from "otplib/preset-default";
 import QRCode from "qrcode";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";

@@ -1,6 +1,6 @@
 // src/app/api/auth/2fa/verify/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import { authenticator } from "otplib";
+import { authenticator } from "otplib/preset-default";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";

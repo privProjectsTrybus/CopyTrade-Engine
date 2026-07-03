@@ -34,7 +34,7 @@ export const authOptions: AuthOptions = {
         if (!ok) { await logFail("invalid_credentials"); return null; }
         if (user.twoFactorEnabled) {
           if (!credentials.totpCode) throw new Error("2FA_REQUIRED");
-          const { authenticator } = await import("otplib");
+          const { authenticator } = await import("otplib/preset-default");
           if (!authenticator.verify({ token: credentials.totpCode, secret: user.twoFactorSecret || "" })) {
             await logFail("invalid_2fa_code"); return null;
           }
