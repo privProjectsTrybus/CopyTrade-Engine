@@ -1,178 +1,137 @@
 "use client";
-// src/app/(app)/exchanges/page.tsx
 import { useEffect, useState, useCallback } from "react";
-import { Badge, Spinner } from "@/components/ui/Badge";
 import { StatCard } from "@/components/ui/StatCard";
-import { BinanceClient } from "@/lib/exchange/binance";
-import { BybitClient } from "@/lib/exchange/bybit";
-import type { AccountInfo } from "@/lib/exchange/types";
+import { Badge, Spinner } from "@/components/ui/Badge";
 
 interface Connection {
-  id: string;
-  exchange: "BINANCE" | "BYBIT";
-  label: string;
-  hasWithdrawPermission: boolean;
-  hasTradePermission: boolean;
-  hasReadPermission: boolean;
-  lastSyncedAt: string | null;
-  lastSyncError: string | null;
-  createdAt: string;
+  id: string; exchange: "BINANCE"|"BYBIT"; label: string;
+  hasWithdrawPermission: boolean; hasTradePermission: boolean;
+  lastSyncedAt: string|null; lastSyncError: string|null; createdAt: string;
 }
-
-interface LiveAccount extends AccountInfo {
-  connectionId: string;
-  error?: string;
+interface LiveInfo {
+  totalWalletBalance: number; availableBalance: number;
+  totalUnrealizedPnl: number; marginRatio: number;
+  canTrade: boolean; canWithdraw: boolean;
 }
+interface LiveData { loading: boolean; data: LiveInfo|null; error: string|null; }
 
-const EXCHANGES = ["BINANCE", "BYBIT"] as const;
+const inp: React.CSSProperties = {
+  marginTop:4, width:"100%", background:"var(--bg-input)", border:"1px solid var(--border)",
+  borderRadius:8, padding:"9px 12px", color:"var(--text)", fontSize:13, boxSizing:"border-box"
+};
 
 export default function ExchangesPage() {
   const [connections, setConnections] = useState<Connection[]>([]);
-  const [liveData, setLiveData] = useState<Record<string, LiveAccount>>({});
+  const [liveData, setLiveData] = useState<Record<string, LiveData>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ exchange: "BINANCE" as "BINANCE" | "BYBIT", label: "", apiKey: "", apiSecret: "" });
+  const [form, setForm] = useState({ exchange:"BINANCE" as "BINANCE"|"BYBIT", label:"", apiKey:"", apiSecret:"" });
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState("");
 
-  const loadConnections = useCallback(async () => {
-    const res = await fetch("/api/exchange/list");
-    if (res.ok) setConnections(await res.json());
-    setLoading(false);
-  }, []);
-
-  const loadLiveData = useCallback(async () => {
-    const credsRes = await fetch("/api/exchange/credentials");
-    if (!credsRes.ok) return;
-    const creds: Array<{ connectionId: string; exchange: string; apiKey: string; apiSecret: string }> = await credsRes.json();
-
-    for (const c of creds) {
-      if (!c.apiKey) continue;
+  const fetchLive = useCallback(async (conns: Connection[]) => {
+    for (const conn of conns) {
+      setLiveData(prev => ({ ...prev, [conn.id]: { loading: true, data: null, error: null } }));
       try {
-        const client = c.exchange === "BINANCE"
-          ? new BinanceClient({ apiKey: c.apiKey, apiSecret: c.apiSecret })
-          : new BybitClient({ apiKey: c.apiKey, apiSecret: c.apiSecret });
-        const info = await client.getAccountInfo();
-        setLiveData((prev) => ({ ...prev, [c.connectionId]: { ...info, connectionId: c.connectionId } }));
-      } catch (err) {
-        setLiveData((prev) => ({ ...prev, [c.connectionId]: { connectionId: c.connectionId, error: String(err) } as any }));
+        const res = await fetch(`/api/exchange/account-info?connectionId=${conn.id}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error ?? "Connection failed");
+        setLiveData(prev => ({ ...prev, [conn.id]: { loading: false, data, error: null } }));
+      } catch (e) {
+        setLiveData(prev => ({ ...prev, [conn.id]: { loading: false, data: null, error: String(e) } }));
       }
     }
   }, []);
 
+  const loadConnections = useCallback(async () => {
+    const res = await fetch("/api/exchange/list");
+    if (res.ok) {
+      const conns = await res.json();
+      setConnections(conns);
+      setLoading(false);
+      fetchLive(conns);
+    }
+  }, [fetchLive]);
+
+  useEffect(() => { loadConnections(); }, [loadConnections]);
+
+  // Refresh every 30s
   useEffect(() => {
-    loadConnections().then(loadLiveData);
-    const interval = setInterval(loadLiveData, 15000);
-    return () => clearInterval(interval);
-  }, [loadConnections, loadLiveData]);
+    const t = setInterval(() => { if (connections.length > 0) fetchLive(connections); }, 30000);
+    return () => clearInterval(t);
+  }, [connections, fetchLive]);
 
   async function handleConnect(e: React.FormEvent) {
-    e.preventDefault();
-    setError(null);
-    setSubmitting(true);
+    e.preventDefault(); setError(""); setSubmitting(true);
     const res = await fetch("/api/exchange/connect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
+      method:"POST", headers:{"Content-Type":"application/json"},
       body: JSON.stringify(form),
     });
-    const data = await res.json();
-    setSubmitting(false);
-    if (!res.ok) { setError(data.error); return; }
+    const data = await res.json(); setSubmitting(false);
+    if (!res.ok) { setError(data.error ?? "Failed to connect"); return; }
     setShowForm(false);
-    setForm({ exchange: "BINANCE", label: "", apiKey: "", apiSecret: "" });
+    setForm({ exchange:"BINANCE", label:"", apiKey:"", apiSecret:"" });
     await loadConnections();
-    await loadLiveData();
   }
 
-  async function handleDisconnect(connectionId: string) {
-    if (!confirm("Remove this exchange connection? Active copy relationships will be paused.")) return;
-    await fetch("/api/exchange/disconnect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ connectionId }),
-    });
-    setConnections((prev) => prev.filter((c) => c.id !== connectionId));
-    setLiveData((prev) => { const n = { ...prev }; delete n[connectionId]; return n; });
+  async function handleDisconnect(id: string) {
+    if (!confirm("Remove this exchange? Active copy relationships will be paused.")) return;
+    await fetch("/api/exchange/disconnect", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({connectionId:id}) });
+    setConnections(c => c.filter(x => x.id !== id));
+    setLiveData(prev => { const n={...prev}; delete n[id]; return n; });
   }
 
-  if (loading) return <div className="flex items-center justify-center h-96"><Spinner size="lg" /></div>;
+  const card: React.CSSProperties = { background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:12 };
+
+  if (loading) return <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:400}}><Spinner size="lg" /></div>;
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+    <div style={{padding:24,maxWidth:960,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24}}>
         <div>
-          <h1 className="text-white text-2xl font-semibold">Exchanges</h1>
-          <p className="text-zinc-500 text-sm mt-0.5">Connect your Binance or Bybit accounts</p>
+          <h1 style={{color:"var(--text)",fontSize:22,fontWeight:600,margin:0}}>Exchanges</h1>
+          <p style={{color:"var(--text-muted)",fontSize:13,marginTop:4}}>Connect your Binance or Bybit account</p>
         </div>
-        <button
-          onClick={() => setShowForm((s) => !s)}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
-        >
+        <button onClick={()=>setShowForm(s=>!s)}
+          style={{padding:"8px 18px",borderRadius:8,border:"none",background:"var(--accent)",color:"#fff",fontSize:13,fontWeight:500,cursor:"pointer"}}>
           {showForm ? "Cancel" : "+ Connect Exchange"}
         </button>
       </div>
 
       {/* Connect form */}
       {showForm && (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6">
-          <h2 className="text-white font-medium mb-4">New Exchange Connection</h2>
-          <form onSubmit={handleConnect} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+        <div style={{...card,padding:24,marginBottom:24}}>
+          <h2 style={{color:"var(--text)",fontSize:15,fontWeight:600,margin:"0 0 16px"}}>New Connection</h2>
+          <form onSubmit={handleConnect} style={{display:"flex",flexDirection:"column",gap:14}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
               <div>
-                <label className="text-zinc-400 text-sm">Exchange</label>
-                <select
-                  value={form.exchange}
-                  onChange={(e) => setForm((f) => ({ ...f, exchange: e.target.value as any }))}
-                  className="mt-1 w-full bg-black border border-zinc-700 rounded-md px-3 py-2 text-white text-sm"
-                >
-                  {EXCHANGES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+                <label style={{color:"var(--text-muted)",fontSize:13}}>Exchange</label>
+                <select value={form.exchange} onChange={e=>setForm(f=>({...f,exchange:e.target.value as any}))} style={inp}>
+                  <option value="BINANCE">Binance (USDT-M Futures)</option>
+                  <option value="BYBIT">Bybit (Unified / Contract)</option>
                 </select>
               </div>
               <div>
-                <label className="text-zinc-400 text-sm">Label (optional)</label>
-                <input
-                  value={form.label}
-                  onChange={(e) => setForm((f) => ({ ...f, label: e.target.value }))}
-                  placeholder="My main account"
-                  className="mt-1 w-full bg-black border border-zinc-700 rounded-md px-3 py-2 text-white text-sm"
-                />
+                <label style={{color:"var(--text-muted)",fontSize:13}}>Label (optional)</label>
+                <input value={form.label} onChange={e=>setForm(f=>({...f,label:e.target.value}))} placeholder="My main account" style={inp} />
               </div>
             </div>
             <div>
-              <label className="text-zinc-400 text-sm">API Key</label>
-              <input
-                required
-                value={form.apiKey}
-                onChange={(e) => setForm((f) => ({ ...f, apiKey: e.target.value }))}
-                className="mt-1 w-full bg-black border border-zinc-700 rounded-md px-3 py-2 text-white text-sm font-mono"
-                placeholder="Paste your API key…"
-              />
+              <label style={{color:"var(--text-muted)",fontSize:13}}>API Key</label>
+              <input required value={form.apiKey} onChange={e=>setForm(f=>({...f,apiKey:e.target.value}))} style={{...inp,fontFamily:"monospace"}} placeholder="Paste API key…" />
             </div>
             <div>
-              <label className="text-zinc-400 text-sm">API Secret</label>
-              <input
-                required
-                type="password"
-                value={form.apiSecret}
-                onChange={(e) => setForm((f) => ({ ...f, apiSecret: e.target.value }))}
-                className="mt-1 w-full bg-black border border-zinc-700 rounded-md px-3 py-2 text-white text-sm font-mono"
-                placeholder="Paste your API secret…"
-              />
+              <label style={{color:"var(--text-muted)",fontSize:13}}>API Secret</label>
+              <input required type="password" value={form.apiSecret} onChange={e=>setForm(f=>({...f,apiSecret:e.target.value}))} style={{...inp,fontFamily:"monospace"}} placeholder="Paste API secret…" />
             </div>
-
-            <div className="bg-blue-900/20 border border-blue-700/30 rounded-lg px-4 py-3 text-sm text-blue-300 space-y-1">
-              <p className="font-medium">Required permissions only</p>
-              <p className="text-blue-400 text-xs">Enable: Futures Trading · Read Info. Do NOT enable: Withdrawals or Spot Trading.</p>
+            <div style={{background:"rgba(59,130,246,0.08)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:8,padding:"12px 16px",fontSize:12,color:"rgba(147,197,253,1)"}}>
+              <p style={{margin:"0 0 4px",fontWeight:600}}>Required permissions</p>
+              <p style={{margin:0,color:"rgba(147,197,253,0.7)"}}>Enable: <b>Futures Trading</b> + <b>Read Info</b>. Do NOT enable Withdrawals. Disable IP restriction or whitelist your IP.</p>
             </div>
-
-            {error && <p className="text-loss text-sm">{error}</p>}
-
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white px-5 py-2 rounded-lg text-sm font-medium transition-colors"
-            >
-              {submitting ? "Connecting…" : "Connect"}
+            {error && <p style={{color:"var(--loss)",fontSize:13,margin:0}}>{error}</p>}
+            <button type="submit" disabled={submitting}
+              style={{padding:"10px",borderRadius:8,border:"none",background:"var(--accent)",color:"#fff",fontSize:14,fontWeight:500,cursor:"pointer",opacity:submitting?0.6:1}}>
+              {submitting?"Connecting…":"Connect"}
             </button>
           </form>
         </div>
@@ -180,73 +139,69 @@ export default function ExchangesPage() {
 
       {/* Connection cards */}
       {connections.length === 0 && !showForm ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-12 text-center">
-          <p className="text-zinc-400">No exchanges connected.</p>
-          <p className="text-zinc-600 text-sm mt-1">Connect a Binance or Bybit account to start copying trades.</p>
+        <div style={{...card,padding:60,textAlign:"center"}}>
+          <p style={{color:"var(--text-muted)",margin:0}}>No exchanges connected.</p>
+          <p style={{color:"var(--text-faint)",fontSize:13,marginTop:8}}>Add a Binance or Bybit API key to get started.</p>
         </div>
       ) : (
-        <div className="space-y-4">
-          {connections.map((conn) => {
+        <div style={{display:"flex",flexDirection:"column",gap:16}}>
+          {connections.map(conn => {
             const live = liveData[conn.id];
+            const hasWithdraw = conn.hasWithdrawPermission || live?.data?.canWithdraw;
             return (
-              <div key={conn.id} className={`bg-zinc-900 border rounded-xl p-5 space-y-4 ${conn.hasWithdrawPermission ? "border-yellow-600/50" : "border-zinc-800"}`}>
+              <div key={conn.id} style={{...card,padding:20,borderColor:hasWithdraw?"rgba(245,158,11,0.4)":"var(--border)"}}>
                 {/* Header */}
-                <div className="flex items-start justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-xs font-bold ${conn.exchange === "BINANCE" ? "bg-yellow-500/20 text-yellow-400" : "bg-orange-500/20 text-orange-400"}`}>
-                      {conn.exchange === "BINANCE" ? "BNB" : "BBT"}
+                <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:44,height:44,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,
+                                 background:conn.exchange==="BINANCE"?"rgba(234,179,8,0.15)":"rgba(249,115,22,0.15)",
+                                 color:conn.exchange==="BINANCE"?"#eab308":"#f97316"}}>
+                      {conn.exchange==="BINANCE"?"BNB":"BBT"}
                     </div>
                     <div>
-                      <p className="text-white font-medium">{conn.label}</p>
-                      <p className="text-zinc-500 text-xs">{conn.exchange} · Connected {new Date(conn.createdAt).toLocaleDateString()}</p>
+                      <p style={{color:"var(--text)",fontWeight:500,fontSize:14,margin:0}}>{conn.label}</p>
+                      <p style={{color:"var(--text-faint)",fontSize:12,margin:"2px 0 0"}}>{conn.exchange} · Added {new Date(conn.createdAt).toLocaleDateString()}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {conn.hasWithdrawPermission && (
-                      <Badge variant="yellow">⚠ Withdraw enabled</Badge>
-                    )}
-                    <Badge variant={live && !live.error ? "green" : "default"}>
-                      {live ? (live.error ? "Error" : "Live") : "Connecting…"}
+                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                    {hasWithdraw && <Badge variant="yellow">⚠ Withdraw enabled</Badge>}
+                    <Badge variant={live?.data ? "green" : live?.error ? "red" : "default"}>
+                      {live?.loading ? "Connecting…" : live?.data ? "Live" : live?.error ? "Error" : "—"}
                     </Badge>
-                    <button
-                      onClick={() => handleDisconnect(conn.id)}
-                      className="text-zinc-600 hover:text-loss text-xs transition-colors px-2"
-                    >
+                    <button onClick={()=>handleDisconnect(conn.id)}
+                      style={{background:"none",border:"none",color:"var(--text-faint)",fontSize:12,cursor:"pointer",padding:"4px 8px"}}>
                       Disconnect
                     </button>
                   </div>
                 </div>
 
-                {/* Withdraw permission warning */}
-                {conn.hasWithdrawPermission && (
-                  <div className="bg-yellow-900/20 border border-yellow-600/30 rounded-lg px-4 py-2 text-yellow-300 text-xs">
-                    ⚠ This API key has withdrawal permissions enabled. We strongly recommend creating a new key with only Futures Trading and Read permissions.
+                {hasWithdraw && (
+                  <div style={{background:"rgba(245,158,11,0.08)",border:"1px solid rgba(245,158,11,0.2)",borderRadius:8,padding:"10px 14px",marginBottom:14,fontSize:12,color:"#fbbf24"}}>
+                    ⚠ This API key has withdrawal permissions. Create a new key with Futures Trading + Read only.
                   </div>
                 )}
 
-                {/* Live account data */}
-                {live && !live.error ? (
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <StatCard label="Wallet Balance" value={`$${live.totalWalletBalance.toFixed(2)}`} />
-                    <StatCard label="Available" value={`$${live.availableBalance.toFixed(2)}`} />
-                    <StatCard
-                      label="Unrealized PnL"
-                      value={`${live.totalUnrealizedPnl >= 0 ? "+" : ""}$${live.totalUnrealizedPnl.toFixed(2)}`}
-                      positive={live.totalUnrealizedPnl > 0}
-                      negative={live.totalUnrealizedPnl < 0}
-                    />
-                    <StatCard
-                      label="Margin Ratio"
-                      value={`${(live.marginRatio * 100).toFixed(1)}%`}
-                      negative={live.marginRatio > 0.7}
-                      positive={live.marginRatio < 0.3}
-                    />
-                  </div>
-                ) : live?.error ? (
-                  <p className="text-loss text-sm">{live.error}</p>
-                ) : (
-                  <div className="flex items-center gap-2 text-zinc-500 text-sm">
+                {live?.loading && (
+                  <div style={{display:"flex",alignItems:"center",gap:10,padding:"12px 0",color:"var(--text-faint)",fontSize:13}}>
                     <Spinner size="sm" /> Fetching account data…
+                  </div>
+                )}
+
+                {live?.error && (
+                  <div style={{background:"rgba(234,57,67,0.08)",border:"1px solid rgba(234,57,67,0.2)",borderRadius:8,padding:"10px 14px",fontSize:12,color:"var(--loss)"}}>
+                    {live.error}
+                  </div>
+                )}
+
+                {live?.data && (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                    <StatCard label="Wallet Balance" value={`$${live.data.totalWalletBalance.toFixed(2)}`} />
+                    <StatCard label="Available" value={`$${live.data.availableBalance.toFixed(2)}`} />
+                    <StatCard label="Unrealized PnL"
+                      value={`${live.data.totalUnrealizedPnl>=0?"+":""}$${live.data.totalUnrealizedPnl.toFixed(2)}`}
+                      positive={live.data.totalUnrealizedPnl>0} negative={live.data.totalUnrealizedPnl<0} />
+                    <StatCard label="Margin Ratio" value={`${(live.data.marginRatio*100).toFixed(1)}%`}
+                      negative={live.data.marginRatio>0.7} positive={live.data.marginRatio<0.3} />
                   </div>
                 )}
               </div>
@@ -255,10 +210,9 @@ export default function ExchangesPage() {
         </div>
       )}
 
-      {/* Security note */}
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-5 py-4 text-sm text-zinc-400 space-y-1">
-        <p className="text-white text-sm font-medium">Security</p>
-        <p>API keys are encrypted with AES-256-GCM before being stored. Requests to exchanges are signed in your browser using Web Crypto API — your secrets never pass through our servers during trade execution.</p>
+      <div style={{...card,padding:"14px 18px",marginTop:20,fontSize:13,color:"var(--text-faint)"}}>
+        <span style={{color:"var(--text)",fontWeight:500}}>Security: </span>
+        Keys are AES-256-GCM encrypted at rest. Balance checks run server-side. Trade execution is signed in your browser so exchange credentials never appear in server logs.
       </div>
     </div>
   );

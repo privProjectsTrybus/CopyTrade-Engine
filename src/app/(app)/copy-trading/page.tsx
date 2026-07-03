@@ -327,6 +327,14 @@ export default function CopyTradingPage() {
       {/* Trader grid */}
       {loading ? (
         <div className="flex justify-center py-16"><Spinner size="lg" /></div>
+      ) : traders.length === 0 ? (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-16 text-center">
+          <p className="text-zinc-400 text-lg font-medium">No traders in the marketplace yet.</p>
+          <p className="text-zinc-500 text-sm mt-2 mb-6">An admin needs to seed the trader data first.</p>
+          <a href="/admin" className="inline-block bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-medium transition-colors">
+            Go to Admin → Seed Traders
+          </a>
+        </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {traders.map((t) => (
