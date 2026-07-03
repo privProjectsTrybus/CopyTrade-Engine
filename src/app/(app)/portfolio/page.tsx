@@ -171,7 +171,7 @@ export default function PortfolioPage() {
                           <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number, name: string) => [v, name]} />
+                      <Tooltip formatter={(v: any) => [v, ""]} />
                     </PieChart>
                   </ResponsiveContainer>
                   <div className="flex-1 space-y-1.5">

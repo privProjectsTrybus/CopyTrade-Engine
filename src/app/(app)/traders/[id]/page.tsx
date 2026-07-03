@@ -145,7 +145,7 @@ export default function TraderProfilePage() {
                 contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }}
                 labelStyle={{ color: "#a1a1aa" }}
                 itemStyle={{ color: "#16c784" }}
-                formatter={(v: number) => [`$${v.toFixed(2)}`, "Equity"]}
+                formatter={(v: any) => [`$${Number(v).toFixed(2)}`, "Equity"]}
               />
               <Line
                 type="monotone" dataKey="equity" stroke="#3b82f6"
@@ -168,7 +168,7 @@ export default function TraderProfilePage() {
               <YAxis stroke="#52525b" tick={{ fontSize: 10 }} tickFormatter={(v) => `${v}%`} />
               <Tooltip
                 contentStyle={{ background: "#18181b", border: "1px solid #3f3f46", borderRadius: 8 }}
-                formatter={(v: number) => [`${v >= 0 ? "+" : ""}${v.toFixed(2)}%`, "ROI"]}
+                formatter={(v: any) => [`${Number(v) >= 0 ? "+" : ""}${Number(v).toFixed(2)}%`, "ROI"]}
               />
               <Bar dataKey="roi" radius={[3, 3, 0, 0]}>
                 {monthlyReturns.map((entry, i) => (
