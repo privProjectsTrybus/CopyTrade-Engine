@@ -1,5 +1,5 @@
 // src/app/api/admin/users/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -32,4 +32,13 @@ export async function GET() {
   });
 
   return NextResponse.json(users);
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = await requireAdmin();
+  if (!session) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const { userId, status } = await req.json();
+  if (!["ACTIVE","DISABLED"].includes(status)) return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  await prisma.user.update({ where: { id: userId }, data: { status } });
+  return NextResponse.json({ success: true });
 }
