@@ -1,5 +1,3 @@
-// Server-side exchange proxy — avoids browser CORS blocks from Bybit/Binance.
-// Decrypts keys, calls exchange server-side, returns sanitised result.
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -7,14 +5,30 @@ import { prisma } from "@/lib/prisma";
 import { decryptSecret } from "@/lib/crypto";
 import { hmacSha256 } from "@/lib/exchange/signing";
 
+// Fetch with a hard timeout so Vercel functions never hang
+async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs = 7000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...options, signal: controller.signal });
+    return res;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function binanceAccountInfo(apiKey: string, apiSecret: string) {
   const ts = Date.now();
   const qs = `timestamp=${ts}&recvWindow=5000`;
   const sig = await hmacSha256(apiSecret, qs);
-  const res = await fetch(`https://fapi.binance.com/fapi/v2/account?${qs}&signature=${sig}`, {
-    headers: { "X-MBX-APIKEY": apiKey },
-  });
-  if (!res.ok) throw new Error(`Binance ${res.status}: ${await res.text()}`);
+  const res = await fetchWithTimeout(
+    `https://fapi.binance.com/fapi/v2/account?${qs}&signature=${sig}`,
+    { headers: { "X-MBX-APIKEY": apiKey } }
+  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => res.status.toString());
+    throw new Error(`Binance error ${res.status}: ${text}`);
+  }
   const d = await res.json();
   return {
     totalWalletBalance: parseFloat(d.totalWalletBalance ?? "0"),
@@ -22,24 +36,27 @@ async function binanceAccountInfo(apiKey: string, apiSecret: string) {
     totalUnrealizedPnl: parseFloat(d.totalUnrealizedProfit ?? "0"),
     marginRatio: parseFloat(d.totalMarginBalance ?? "1") > 0
       ? parseFloat(d.totalMaintMargin ?? "0") / parseFloat(d.totalMarginBalance ?? "1") : 0,
-    canTrade: d.canTrade,
-    canWithdraw: d.canWithdraw,
+    canTrade: d.canTrade ?? false,
+    canWithdraw: d.canWithdraw ?? false,
   };
 }
 
 async function bybitAccountInfo(apiKey: string, apiSecret: string) {
   const types = ["UNIFIED", "CONTRACT", "SPOT"];
+  const errors: string[] = [];
+
   for (const accountType of types) {
     try {
       const ts = String(Date.now());
       const qs = `accountType=${accountType}`;
       const sig = await hmacSha256(apiSecret, `${ts}${apiKey}5000${qs}`);
-      const res = await fetch(`https://api.bybit.com/v5/account/wallet-balance?${qs}`, {
-        headers: { "X-BAPI-API-KEY": apiKey, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000", "X-BAPI-SIGN": sig },
-      });
-      if (!res.ok) continue;
+      const res = await fetchWithTimeout(
+        `https://api.bybit.com/v5/account/wallet-balance?${qs}`,
+        { headers: { "X-BAPI-API-KEY": apiKey, "X-BAPI-TIMESTAMP": ts, "X-BAPI-RECV-WINDOW": "5000", "X-BAPI-SIGN": sig } }
+      );
+      if (!res.ok) { errors.push(`HTTP ${res.status} for ${accountType}`); continue; }
       const json = await res.json();
-      if (json.retCode !== 0) continue;
+      if (json.retCode !== 0) { errors.push(`${accountType}: ${json.retMsg}`); continue; }
       const account = json.result?.list?.[0] ?? {};
       const walletBalance = parseFloat(account.totalWalletBalance ?? account.totalEquity ?? "0");
       return {
@@ -50,9 +67,12 @@ async function bybitAccountInfo(apiKey: string, apiSecret: string) {
         canTrade: true,
         canWithdraw: false,
       };
-    } catch {}
+    } catch (e) {
+      const msg = String(e).includes("abort") ? `${accountType}: timed out` : `${accountType}: ${e}`;
+      errors.push(msg);
+    }
   }
-  throw new Error("Could not connect to Bybit. Check your API key permissions.");
+  throw new Error(`Bybit connection failed — ${errors.join(" | ")}`);
 }
 
 export async function GET(req: NextRequest) {
@@ -60,21 +80,20 @@ export async function GET(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as any).id as string;
 
-  const { searchParams } = new URL(req.url);
-  const connectionId = searchParams.get("connectionId");
+  const connectionId = new URL(req.url).searchParams.get("connectionId");
   if (!connectionId) return NextResponse.json({ error: "Missing connectionId" }, { status: 400 });
 
   const conn = await prisma.exchangeConnection.findFirst({ where: { id: connectionId, userId, isActive: true } });
   if (!conn) return NextResponse.json({ error: "Connection not found" }, { status: 404 });
 
-  const [keyIv, secretIv] = conn.encryptionIv.split("|");
-  const [keyTag, secretTag] = conn.encryptionTag.split("|");
   let apiKey = "", apiSecret = "";
   try {
+    const [keyIv, secretIv] = conn.encryptionIv.split("|");
+    const [keyTag, secretTag] = conn.encryptionTag.split("|");
     apiKey = decryptSecret({ ciphertext: conn.encryptedApiKey, iv: keyIv, tag: keyTag });
     apiSecret = decryptSecret({ ciphertext: conn.encryptedApiSecret, iv: secretIv, tag: secretTag });
   } catch {
-    return NextResponse.json({ error: "Failed to decrypt credentials. Reconnect this exchange." }, { status: 500 });
+    return NextResponse.json({ error: "Failed to decrypt credentials — reconnect this exchange." }, { status: 500 });
   }
 
   try {
@@ -82,15 +101,15 @@ export async function GET(req: NextRequest) {
       ? await binanceAccountInfo(apiKey, apiSecret)
       : await bybitAccountInfo(apiKey, apiSecret);
 
-    // Update permission flags
     await prisma.exchangeConnection.update({
       where: { id: connectionId },
-      data: { hasTradePermission: info.canTrade, hasWithdrawPermission: info.canWithdraw ?? false, lastSyncedAt: new Date(), lastSyncError: null },
+      data: { hasTradePermission: info.canTrade, hasWithdrawPermission: info.canWithdraw, lastSyncedAt: new Date(), lastSyncError: null },
     });
 
     return NextResponse.json(info, { headers: { "Cache-Control": "no-store" } });
   } catch (e) {
-    await prisma.exchangeConnection.update({ where: { id: connectionId }, data: { lastSyncError: String(e) } });
-    return NextResponse.json({ error: String(e) }, { status: 502 });
+    const errMsg = String(e);
+    await prisma.exchangeConnection.update({ where: { id: connectionId }, data: { lastSyncError: errMsg } }).catch(() => {});
+    return NextResponse.json({ error: errMsg }, { status: 502 });
   }
 }

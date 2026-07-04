@@ -33,7 +33,10 @@ export default function ExchangesPage() {
     for (const conn of conns) {
       setLiveData(prev => ({ ...prev, [conn.id]: { loading: true, data: null, error: null } }));
       try {
-        const res = await fetch(`/api/exchange/account-info?connectionId=${conn.id}`);
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 12000);
+        const res = await fetch(`/api/exchange/account-info?connectionId=${conn.id}`, { signal: controller.signal });
+        clearTimeout(timer);
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? "Connection failed");
         setLiveData(prev => ({ ...prev, [conn.id]: { loading: false, data, error: null } }));
