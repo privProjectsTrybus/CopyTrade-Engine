@@ -25,7 +25,7 @@ export default function ExchangesPage() {
   const [liveData, setLiveData] = useState<Record<string, LiveData>>({});
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ exchange:"BINANCE" as "BINANCE"|"BYBIT", label:"", apiKey:"", apiSecret:"" });
+  const [form, setForm] = useState({ exchange:"BINANCE" as "BINANCE"|"BYBIT"|"OKX", label:"", apiKey:"", apiSecret:"", passphrase:"" });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
@@ -73,7 +73,7 @@ export default function ExchangesPage() {
     const data = await res.json(); setSubmitting(false);
     if (!res.ok) { setError(data.error ?? "Failed to connect"); return; }
     setShowForm(false);
-    setForm({ exchange:"BINANCE", label:"", apiKey:"", apiSecret:"" });
+    setForm({ exchange:"BINANCE", label:"", apiKey:"", apiSecret:"", passphrase:"" });
     await loadConnections();
   }
 
@@ -112,6 +112,7 @@ export default function ExchangesPage() {
                 <select value={form.exchange} onChange={e=>setForm(f=>({...f,exchange:e.target.value as any}))} style={inp}>
                   <option value="BINANCE">Binance (USDT-M Futures)</option>
                   <option value="BYBIT">Bybit (Unified / Contract)</option>
+                  <option value="OKX">OKX (Swap / Futures)</option>
                 </select>
               </div>
               <div>
@@ -127,9 +128,15 @@ export default function ExchangesPage() {
               <label style={{color:"var(--text-muted)",fontSize:13}}>API Secret</label>
               <input required type="password" value={form.apiSecret} onChange={e=>setForm(f=>({...f,apiSecret:e.target.value}))} style={{...inp,fontFamily:"monospace"}} placeholder="Paste API secret…" />
             </div>
+            {form.exchange === "OKX" && (
+              <div>
+                <label style={{color:"var(--text-muted)",fontSize:13}}>Passphrase <span style={{color:"var(--text-faint)"}}>— set when you created the key</span></label>
+                <input required={form.exchange==="OKX"} type="password" value={form.passphrase} onChange={e=>setForm(f=>({...f,passphrase:e.target.value}))} style={{...inp,fontFamily:"monospace"}} placeholder="OKX API passphrase…" />
+              </div>
+            )}
             <div style={{background:"rgba(59,130,246,0.08)",border:"1px solid rgba(59,130,246,0.2)",borderRadius:8,padding:"12px 16px",fontSize:12,color:"rgba(147,197,253,1)"}}>
               <p style={{margin:"0 0 4px",fontWeight:600}}>Required permissions</p>
-              <p style={{margin:0,color:"rgba(147,197,253,0.7)"}}>Enable: <b>Futures Trading</b> + <b>Read Info</b>. Do NOT enable Withdrawals. Disable IP restriction or whitelist your IP.</p>
+              <p style={{margin:0,color:"rgba(147,197,253,0.7)"}}>Enable: <b>Futures Trading</b> + <b>Read Info</b>. Do NOT enable Withdrawals. Disable IP restriction or whitelist your IP. OKX also requires a <b>Passphrase</b> you set when creating the key.</p>
             </div>
             {error && <p style={{color:"var(--loss)",fontSize:13,margin:0}}>{error}</p>}
             <button type="submit" disabled={submitting}
@@ -157,9 +164,9 @@ export default function ExchangesPage() {
                 <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",marginBottom:16}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:44,height:44,borderRadius:10,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:12,
-                                 background:conn.exchange==="BINANCE"?"rgba(234,179,8,0.15)":"rgba(249,115,22,0.15)",
-                                 color:conn.exchange==="BINANCE"?"#eab308":"#f97316"}}>
-                      {conn.exchange==="BINANCE"?"BNB":"BBT"}
+                                 background:conn.exchange==="BINANCE"?"rgba(234,179,8,0.15)":conn.exchange==="OKX"?"rgba(59,130,246,0.15)":"rgba(249,115,22,0.15)",
+                                 color:conn.exchange==="BINANCE"?"#eab308":conn.exchange==="OKX"?"#3b82f6":"#f97316"}}>
+                      {conn.exchange==="BINANCE"?"BNB":conn.exchange==="OKX"?"OKX":"BBT"}
                     </div>
                     <div>
                       <p style={{color:"var(--text)",fontWeight:500,fontSize:14,margin:0}}>{conn.label}</p>

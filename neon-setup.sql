@@ -330,3 +330,6 @@ VALUES ('riskprofile-admin-001', 'admin-user-001', now());
 
 INSERT INTO "NotificationSettings" (id, "userId", "updatedAt")
 VALUES ('notif-admin-001', 'admin-user-001', now());
+
+-- Add OKX exchange support (run this if tables already exist)
+-- ALTER TYPE "ExchangeName" ADD VALUE IF NOT EXISTS 'OKX';

@@ -4,7 +4,7 @@
 // ExchangeClient so the copy engine doesn't care which exchange it's on.
 // ----------------------------------------------------------------
 
-export type ExchangeName = "BINANCE" | "BYBIT";
+export type ExchangeName = "BINANCE" | "BYBIT" | "OKX";
 
 export interface Credentials {
   apiKey: string;

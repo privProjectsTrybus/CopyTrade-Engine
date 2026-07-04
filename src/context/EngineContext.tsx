@@ -7,6 +7,7 @@
 import { createContext, useContext, useEffect, useRef, useState, ReactNode } from "react";
 import { BinanceClient } from "@/lib/exchange/binance";
 import { BybitClient } from "@/lib/exchange/bybit";
+import { OkxClient } from "@/lib/exchange/okx";
 import { copyEngine, EngineEvent } from "@/lib/copyEngine";
 import type { RiskLimits } from "@/lib/riskEngine";
 
@@ -45,12 +46,14 @@ export function EngineProvider({ children }: { children: ReactNode }) {
         ]);
 
         if (credsRes.ok) {
-          const creds: Array<{ connectionId: string; exchange: string; apiKey: string; apiSecret: string }> = await credsRes.json();
+          const creds: Array<{ connectionId: string; exchange: string; apiKey: string; apiSecret: string; passphrase?: string }> = await credsRes.json();
           for (const c of creds) {
             if (!c.apiKey) continue; // reconnect needed
             const client =
               c.exchange === "BINANCE"
                 ? new BinanceClient({ apiKey: c.apiKey, apiSecret: c.apiSecret })
+                : c.exchange === "OKX"
+                ? new OkxClient({ apiKey: c.apiKey, apiSecret: c.apiSecret, passphrase: c.passphrase ?? "" })
                 : new BybitClient({ apiKey: c.apiKey, apiSecret: c.apiSecret });
             copyEngine.registerClient(c.connectionId, client);
           }

@@ -75,6 +75,33 @@ async function bybitAccountInfo(apiKey: string, apiSecret: string) {
   throw new Error(`Bybit connection failed — ${errors.join(" | ")}`);
 }
 
+
+async function okxAccountInfo(apiKey: string, apiSecret: string, passphrase: string) {
+  const ts = new Date().toISOString().replace(/\.\d{3}/, ".000");
+  const path = "/api/v5/account/balance";
+  const msg = `${ts}GET${path}`;
+  // OKX sign: base64(hmac-sha256)
+  const hexSig = await hmacSha256(apiSecret, msg);
+  const bytes = hexSig.match(/.{2}/g)!.map((b: string) => parseInt(b, 16));
+  const sig = Buffer.from(bytes).toString("base64");
+  const res = await fetchWithTimeout(`https://www.okx.com${path}`, {
+    headers: { "OK-ACCESS-KEY": apiKey, "OK-ACCESS-SIGN": sig, "OK-ACCESS-TIMESTAMP": ts, "OK-ACCESS-PASSPHRASE": passphrase, "Content-Type": "application/json" }
+  });
+  if (!res.ok) throw new Error(`OKX HTTP ${res.status}`);
+  const json = await res.json();
+  if (json.code !== "0") throw new Error(`OKX ${json.code}: ${json.msg}`);
+  const account = json.data?.[0] ?? {};
+  const totalEq = parseFloat(account.totalEq ?? "0");
+  return {
+    totalWalletBalance: totalEq,
+    availableBalance: parseFloat(account.adjEq ?? String(totalEq)),
+    totalUnrealizedPnl: parseFloat(account.upl ?? "0"),
+    marginRatio: 0,
+    canTrade: true,
+    canWithdraw: false,
+  };
+}
+
 export async function GET(req: NextRequest) {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -97,8 +124,13 @@ export async function GET(req: NextRequest) {
   }
 
   try {
+    const passphrase = conn.exchange === "OKX" ? (() => {
+      try { return decryptSecret({ ciphertext: conn.encryptedApiKey, iv: conn.encryptionIv.split("|")[2] ?? "", tag: conn.encryptionTag.split("|")[2] ?? "" }); } catch { return ""; }
+    })() : "";
     const info = conn.exchange === "BINANCE"
       ? await binanceAccountInfo(apiKey, apiSecret)
+      : conn.exchange === "OKX"
+      ? await okxAccountInfo(apiKey, apiSecret, passphrase)
       : await bybitAccountInfo(apiKey, apiSecret);
 
     await prisma.exchangeConnection.update({

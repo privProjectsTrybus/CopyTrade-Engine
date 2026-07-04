@@ -8,7 +8,8 @@ import { encryptSecret } from "@/lib/crypto";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 const schema = z.object({
-  exchange: z.enum(["BINANCE", "BYBIT"]),
+  exchange: z.enum(["BINANCE", "BYBIT", "OKX"]),
+  passphrase: z.string().max(100).optional(),
   label: z.string().max(40).optional(),
   apiKey: z.string().min(10).max(200),
   apiSecret: z.string().min(10).max(200),
@@ -30,11 +31,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: parsed.error.errors[0]?.message }, { status: 400 });
   }
 
-  const { exchange, label, apiKey, apiSecret } = parsed.data;
+  const { exchange, label, apiKey, apiSecret, passphrase } = parsed.data;
 
   // Encrypt both key and secret separately (different IV per field)
   const encKey = encryptSecret(apiKey);
   const encSecret = encryptSecret(apiSecret);
+  const encPass = passphrase ? encryptSecret(passphrase) : null;
 
   // We do a basic permission test here server-side via a lightweight ping
   // using the provided credentials. Full account-info permission check
@@ -54,8 +56,8 @@ export async function POST(req: NextRequest) {
       label: label ?? exchange,
       encryptedApiKey: encKey.ciphertext,
       encryptedApiSecret: encSecret.ciphertext,
-      encryptionIv: `${encKey.iv}|${encSecret.iv}`,
-      encryptionTag: `${encKey.tag}|${encSecret.tag}`,
+      encryptionIv: `${encKey.iv}|${encSecret.iv}${encPass ? "|" + encPass.iv : ""}`,
+      encryptionTag: `${encKey.tag}|${encSecret.tag}${encPass ? "|" + encPass.tag : ""}`,
       hasWithdrawPermission,
       hasTradePermission,
       hasReadPermission,

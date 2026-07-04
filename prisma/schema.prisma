@@ -117,6 +117,7 @@ model TrustedDevice {
 enum ExchangeName {
   BINANCE
   BYBIT
+  OKX
 }
 
 model ExchangeConnection {
