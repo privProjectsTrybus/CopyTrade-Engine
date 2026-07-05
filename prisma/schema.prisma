@@ -515,3 +515,22 @@ model NotificationSettings {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
+
+// ── Signal History (Stage 4) ─────────────────────────────────────────────────
+model SignalHistory {
+  id          String   @id @default(cuid())
+  source      String   // "BINANCE" | "BYBIT"
+  traderUid   String
+  traderName  String
+  symbol      String
+  side        String   // "LONG" | "SHORT"
+  entryPrice  Float
+  leverage    Float
+  roe         Float
+  seenAt      DateTime @default(now())
+  closedAt    DateTime?
+  isOpen      Boolean  @default(true)
+
+  @@index([traderUid, symbol, isOpen])
+  @@index([seenAt])
+}

@@ -333,3 +333,21 @@ VALUES ('notif-admin-001', 'admin-user-001', now());
 
 -- Add OKX exchange support (run this if tables already exist)
 -- ALTER TYPE "ExchangeName" ADD VALUE IF NOT EXISTS 'OKX';
+
+-- Signal History table (add after initial schema)
+CREATE TABLE IF NOT EXISTS "SignalHistory" (
+  "id" TEXT NOT NULL PRIMARY KEY,
+  "source" TEXT NOT NULL,
+  "traderUid" TEXT NOT NULL,
+  "traderName" TEXT NOT NULL,
+  "symbol" TEXT NOT NULL,
+  "side" TEXT NOT NULL,
+  "entryPrice" FLOAT NOT NULL,
+  "leverage" FLOAT NOT NULL,
+  "roe" FLOAT NOT NULL DEFAULT 0,
+  "seenAt" TIMESTAMP NOT NULL DEFAULT now(),
+  "closedAt" TIMESTAMP,
+  "isOpen" BOOLEAN NOT NULL DEFAULT true
+);
+CREATE INDEX IF NOT EXISTS "SignalHistory_traderUid_symbol_isOpen_idx" ON "SignalHistory"("traderUid","symbol","isOpen");
+CREATE INDEX IF NOT EXISTS "SignalHistory_seenAt_idx" ON "SignalHistory"("seenAt");

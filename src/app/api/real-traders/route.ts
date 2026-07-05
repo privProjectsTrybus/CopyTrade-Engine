@@ -1,21 +1,18 @@
-// src/app/api/real-traders/route.ts
-// Aggregates real top traders from Bybit and Binance public leaderboard APIs.
-// No authentication required — all public data.
-
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 
 export interface RealTrader {
   uid: string;
-  source: "BYBIT" | "BINANCE";
+  source: "BYBIT" | "BINANCE" | "BYBIT_COPY";
   nickname: string;
   rank: number;
-  roi: number;       // percentage
-  pnl: number;       // USDT
-  winRate: number;   // percentage
+  roi: number;
+  pnl: number;
+  winRate: number;
   followers?: number;
   avgLeverage?: number;
+  maxDrawdown?: number;
   positions: RealPosition[];
   profileUrl: string;
   sharesPositions: boolean;
@@ -29,170 +26,180 @@ export interface RealPosition {
   leverage: number;
   size: number;
   unrealizedPnl: number;
-  roe: number; // return on equity %
+  roe: number;
 }
 
-const TIMEOUT = 8000;
-
-async function fetchTimeout(url: string, options: RequestInit = {}) {
-  const ctrl = new AbortController();
-  const t = setTimeout(() => ctrl.abort(), TIMEOUT);
-  try {
-    return await fetch(url, { ...options, signal: ctrl.signal });
-  } finally {
-    clearTimeout(t);
-  }
+async function ft(url: string, opts: RequestInit = {}, ms = 8000) {
+  const c = new AbortController();
+  const t = setTimeout(() => c.abort(), ms);
+  try { return await fetch(url, { ...opts, signal: c.signal }); }
+  finally { clearTimeout(t); }
 }
 
-// ── Bybit public leaderboard ────────────────────────────────────────────────
-
-async function fetchBybitTraders(): Promise<RealTrader[]> {
+// ── Bybit Futures Leaderboard ────────────────────────────────────────────────
+async function fetchBybitLeaderboard(): Promise<RealTrader[]> {
   try {
-    const res = await fetchTimeout(
-      "https://api.bybit.com/v5/leaderboard/list?category=linear&type=periodPnl&period=monthly&limit=20"
-    );
+    const res = await ft("https://api.bybit.com/v5/leaderboard/list?category=linear&type=periodPnl&period=monthly&limit=20");
     if (!res.ok) return [];
     const json = await res.json();
     if (json.retCode !== 0) return [];
-
-    const list: any[] = json.result?.list ?? [];
-
-    return list.slice(0, 15).map((t, i) => ({
-      uid: t.userId ?? String(i),
+    return (json.result?.list ?? []).slice(0, 15).map((t: any, i: number) => ({
+      uid: `bybit-${t.userId ?? i}`,
       source: "BYBIT",
-      nickname: t.nickname || `Bybit Trader #${i + 1}`,
+      nickname: t.nickname || `Bybit #${i + 1}`,
       rank: i + 1,
       roi: parseFloat(t.roi ?? "0") * 100,
       pnl: parseFloat(t.pnl ?? "0"),
       winRate: parseFloat(t.winRate ?? "0") * 100,
       followers: t.followerNum ?? 0,
-      avgLeverage: undefined,
       positions: [],
       profileUrl: `https://www.bybit.com/copyTrade/trade-center/detail?leaderMark=${t.userId}`,
       sharesPositions: false,
     }));
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
 
-// ── Binance public leaderboard ──────────────────────────────────────────────
+// ── Bybit Copy Trading Elite Traders ────────────────────────────────────────
+async function fetchBybitCopyTraders(): Promise<RealTrader[]> {
+  try {
+    // Bybit copy trading public leaderboard
+    const res = await ft("https://api.bybit.com/v5/copy-trading/public/elite-list?limit=20");
+    if (!res.ok) return [];
+    const json = await res.json();
+    if (json.retCode !== 0) return [];
+    const list: any[] = json.result?.list ?? [];
 
+    const traders: RealTrader[] = [];
+    for (const t of list.slice(0, 10)) {
+      // Try to get their open positions
+      let positions: RealPosition[] = [];
+      try {
+        const posRes = await ft(`https://api.bybit.com/v5/copy-trading/public/leader-position?leaderId=${t.leaderId}`);
+        if (posRes.ok) {
+          const posJson = await posRes.json();
+          if (posJson.retCode === 0) {
+            positions = (posJson.result?.list ?? []).map((p: any) => ({
+              symbol: p.symbol,
+              side: p.side === "Buy" ? "LONG" : "SHORT",
+              entryPrice: parseFloat(p.avgPrice ?? "0"),
+              markPrice: parseFloat(p.markPrice ?? p.avgPrice ?? "0"),
+              leverage: parseFloat(p.leverage ?? "1"),
+              size: parseFloat(p.size ?? "0"),
+              unrealizedPnl: parseFloat(p.unrealisedPnl ?? "0"),
+              roe: parseFloat(p.unrealisedPnl ?? "0") / Math.max(1, parseFloat(p.positionValue ?? "1") / parseFloat(p.leverage ?? "1")) * 100,
+            }));
+          }
+        }
+      } catch {}
+
+      traders.push({
+        uid: `bybit-copy-${t.leaderId}`,
+        source: "BYBIT_COPY",
+        nickname: t.leaderName || `Bybit Copy #${traders.length + 1}`,
+        rank: traders.length + 1,
+        roi: parseFloat(t.roiRate ?? "0") * 100,
+        pnl: parseFloat(t.totalPnl ?? "0"),
+        winRate: parseFloat(t.winRate ?? "0") * 100,
+        followers: parseInt(t.followerNum ?? "0"),
+        avgLeverage: parseFloat(t.avgLeverage ?? "0"),
+        maxDrawdown: parseFloat(t.maxDrawdownRate ?? "0") * 100,
+        positions,
+        profileUrl: `https://www.bybit.com/copyTrade/trade-center/detail?leaderMark=${t.leaderId}`,
+        sharesPositions: positions.length > 0,
+      });
+    }
+    return traders;
+  } catch { return []; }
+}
+
+// ── Binance Leaderboard ──────────────────────────────────────────────────────
 async function fetchBinanceTraders(): Promise<RealTrader[]> {
   try {
-    // Fetch top traders by ROI (30 day)
-    const res = await fetchTimeout(
+    const res = await ft(
       "https://www.binance.com/bapi/futures/v3/public/future/leaderboard/getLeaderboardRank",
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          isShared: true,
-          isTrader: false,
-          periodType: "MONTHLY",
-          statisticsType: "ROI",
-          tradeType: "PERPETUAL",
-        }),
-      }
+      { method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ isShared: true, isTrader: false, periodType: "MONTHLY", statisticsType: "ROI", tradeType: "PERPETUAL" }) }
     );
     if (!res.ok) return [];
     const json = await res.json();
     const list: any[] = json.data ?? [];
-
     const traders: RealTrader[] = [];
 
-    for (const t of list.slice(0, 15)) {
-      // Fetch detailed stats for each trader
-      let roi = 0, pnl = 0, winRate = 0;
-      let positions: RealPosition[] = [];
-      let sharesPositions = false;
+    // Process in parallel batches of 5 to stay within timeout
+    const chunks = [];
+    for (let i = 0; i < Math.min(list.length, 20); i += 5) chunks.push(list.slice(i, i + 5));
 
-      try {
-        const perfRes = await fetchTimeout(
-          "https://www.binance.com/bapi/futures/v2/public/future/leaderboard/getOtherLeaderboardBaseInfo",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ encryptedUid: t.encryptedUid }),
-          }
-        );
-        if (perfRes.ok) {
-          const perf = await perfRes.json();
-          const d = perf.data ?? {};
-          roi = parseFloat(d.roiValue ?? "0") * 100;
-          pnl = parseFloat(d.pnlValue ?? "0");
-          winRate = parseFloat(d.winRate ?? "0") * 100;
-          sharesPositions = d.positionShared ?? false;
-        }
-      } catch {}
+    for (const chunk of chunks) {
+      const results = await Promise.allSettled(chunk.map(async (t: any) => {
+        let roi = 0, pnl = 0, winRate = 0, sharesPositions = false;
+        let positions: RealPosition[] = [];
 
-      // Fetch open positions if trader shares them publicly
-      if (sharesPositions) {
         try {
-          const posRes = await fetchTimeout(
-            "https://www.binance.com/bapi/futures/v2/public/future/leaderboard/getOtherPosition",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ encryptedUid: t.encryptedUid, tradeType: "PERPETUAL" }),
-            }
+          const infoRes = await ft(
+            "https://www.binance.com/bapi/futures/v2/public/future/leaderboard/getOtherLeaderboardBaseInfo",
+            { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ encryptedUid: t.encryptedUid }) },
+            4000
           );
-          if (posRes.ok) {
-            const posJson = await posRes.json();
-            const posList: any[] = posJson.data?.otherPositionRetList ?? [];
-            positions = posList.map(p => ({
-              symbol: p.symbol,
-              side: parseFloat(p.amount) > 0 ? "LONG" : "SHORT",
-              entryPrice: parseFloat(p.entryPrice ?? "0"),
-              markPrice: parseFloat(p.markPrice ?? "0"),
-              leverage: parseFloat(p.leverage ?? "1"),
-              size: Math.abs(parseFloat(p.amount ?? "0")),
-              unrealizedPnl: parseFloat(p.pnl ?? "0"),
-              roe: parseFloat(p.roe ?? "0") * 100,
-            }));
+          if (infoRes.ok) {
+            const info = await infoRes.json();
+            const d = info.data ?? {};
+            roi = parseFloat(d.roiValue ?? "0") * 100;
+            pnl = parseFloat(d.pnlValue ?? "0");
+            winRate = parseFloat(d.winRate ?? "0") * 100;
+            sharesPositions = d.positionShared ?? false;
           }
         } catch {}
+
+        if (sharesPositions) {
+          try {
+            const posRes = await ft(
+              "https://www.binance.com/bapi/futures/v2/public/future/leaderboard/getOtherPosition",
+              { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ encryptedUid: t.encryptedUid, tradeType: "PERPETUAL" }) },
+              4000
+            );
+            if (posRes.ok) {
+              const posJson = await posRes.json();
+              positions = (posJson.data?.otherPositionRetList ?? []).map((p: any) => ({
+                symbol: p.symbol,
+                side: parseFloat(p.amount) > 0 ? "LONG" : "SHORT",
+                entryPrice: parseFloat(p.entryPrice ?? "0"),
+                markPrice: parseFloat(p.markPrice ?? "0"),
+                leverage: parseFloat(p.leverage ?? "1"),
+                size: Math.abs(parseFloat(p.amount ?? "0")),
+                unrealizedPnl: parseFloat(p.pnl ?? "0"),
+                roe: parseFloat(p.roe ?? "0") * 100,
+              }));
+            }
+          } catch {}
+        }
+
+        return { uid: `binance-${t.encryptedUid}`, source: "BINANCE" as const, nickname: t.nickName || "Binance Trader",
+          rank: traders.length + 1, roi, pnl, winRate, positions, sharesPositions,
+          profileUrl: `https://www.binance.com/en/futures-activity/leaderboard/user?encryptedUid=${t.encryptedUid}` };
+      }));
+
+      for (const r of results) {
+        if (r.status === "fulfilled") traders.push(r.value);
       }
-
-      traders.push({
-        uid: t.encryptedUid,
-        source: "BINANCE",
-        nickname: t.nickName || `Binance Trader #${traders.length + 1}`,
-        rank: traders.length + 1,
-        roi,
-        pnl,
-        winRate,
-        followers: undefined,
-        positions,
-        profileUrl: `https://www.binance.com/en/futures-activity/leaderboard/user?encryptedUid=${t.encryptedUid}`,
-        sharesPositions,
-      });
     }
-
     return traders;
-  } catch {
-    return [];
-  }
+  } catch { return []; }
 }
-
-// ── Combined endpoint ───────────────────────────────────────────────────────
 
 export async function GET() {
   const session = await getServerSession(authOptions);
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const [bybit, binance] = await Promise.all([
-    fetchBybitTraders(),
+  const [bybit, bybitCopy, binance] = await Promise.all([
+    fetchBybitLeaderboard(),
+    fetchBybitCopyTraders(),
     fetchBinanceTraders(),
   ]);
 
-  // Merge and sort by ROI descending
-  const all = [...binance, ...bybit]
+  const all = [...binance, ...bybitCopy, ...bybit]
     .filter(t => t.roi !== 0 || t.pnl !== 0)
     .sort((a, b) => b.roi - a.roi)
-    .slice(0, 30);
+    .slice(0, 40);
 
-  return NextResponse.json(all, {
-    headers: { "Cache-Control": "public, max-age=180" }, // cache 3 min
-  });
+  return NextResponse.json(all, { headers: { "Cache-Control": "public, max-age=120" } });
 }
