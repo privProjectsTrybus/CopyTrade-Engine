@@ -500,6 +500,7 @@ model NotificationSettings {
   emailEnabled      Boolean @default(false)
   telegramEnabled   Boolean @default(false)
   telegramChatId    String?
+  telegramBotToken  String?
   discordEnabled    Boolean @default(false)
   discordWebhookUrl String?
 

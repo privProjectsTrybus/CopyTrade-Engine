@@ -4,7 +4,7 @@ import { StatCard } from "@/components/ui/StatCard";
 import { Badge, Spinner } from "@/components/ui/Badge";
 
 interface Connection {
-  id: string; exchange: "BINANCE"|"BYBIT"; label: string;
+  id: string; exchange: "BINANCE"|"BYBIT"|"OKX"; label: string;
   hasWithdrawPermission: boolean; hasTradePermission: boolean;
   lastSyncedAt: string|null; lastSyncError: string|null; createdAt: string;
 }

@@ -27,7 +27,7 @@ export async function PUT(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const userId = (session.user as any).id as string;
   const body = await req.json();
-  const allowed = ["browserEnabled","emailEnabled","telegramEnabled","telegramChatId","discordEnabled","discordWebhookUrl","onTradeOpen","onTradeClose","onStopLossHit","onRiskBreach","onExchangeError","onAiSignal"];
+  const allowed = ["browserEnabled","emailEnabled","telegramEnabled","telegramChatId","telegramBotToken","discordEnabled","discordWebhookUrl","onTradeOpen","onTradeClose","onStopLossHit","onRiskBreach","onExchangeError","onAiSignal"];
   const data: Record<string, unknown> = {};
   for (const key of allowed) { if (key in body) data[key] = body[key]; }
   const settings = await prisma.notificationSettings.upsert({ where:{userId}, update:data, create:{userId,...data} });
