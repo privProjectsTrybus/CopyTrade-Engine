@@ -260,6 +260,8 @@ export default function SignalsPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [newUids, setNewUids] = useState<Set<string>>(new Set());
   const [soundEnabled, setSoundEnabled] = useState(true);
+  const [autoAlert, setAutoAlert] = useState(false);
+  const [alertStatus, setAlertStatus] = useState<string>("");
 
   // Filters
   const [minRoi, setMinRoi] = useState(0);
@@ -301,6 +303,23 @@ export default function SignalsPage() {
       prevUidsRef.current = currentUids;
       setTraders(data);
       setLastUpdated(new Date());
+
+      // Auto-alert: send Telegram for any new positions matching filters
+      if (autoAlert) {
+        fetch("/api/signals/auto-alert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            traders: data,
+            filters: { minRoi, minWinRate, maxDrawdown, autoAlertEnabled: true },
+          }),
+        }).then(r => r.json()).then(d => {
+          if (d.alertsSent > 0) {
+            setAlertStatus(`📱 ${d.alertsSent} new alert${d.alertsSent > 1 ? "s" : ""} sent to Telegram`);
+            setTimeout(() => setAlertStatus(""), 8000);
+          }
+        }).catch(() => {});
+      }
     } catch (e) {
       setError(String(e));
     } finally {
@@ -317,7 +336,7 @@ export default function SignalsPage() {
       timerRef.current = setInterval(() => load(true), 60000);
     }
     return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [autoRefresh, load]);
+  }, [autoRefresh, load, autoAlert, minRoi, minWinRate, maxDrawdown]);
 
   const filtered = traders
     .filter(t => sourceFilter === "ALL" || t.source === sourceFilter)
@@ -341,6 +360,7 @@ export default function SignalsPage() {
           <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 4 }}>
             Real top traders from Binance & Bybit. Auto-refreshes every 60s.
             {lastUpdated && <span style={{ color: "var(--text-faint)" }}> Last: {lastUpdated.toLocaleTimeString()}</span>}
+          {alertStatus && <span style={{ color: "#a78bfa", fontWeight: 600 }}> · {alertStatus}</span>}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -355,6 +375,10 @@ export default function SignalsPage() {
           <button onClick={() => setAutoRefresh(a => !a)}
             style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${autoRefresh ? "rgba(22,199,132,0.4)" : "var(--border)"}`, background: autoRefresh ? "rgba(22,199,132,0.08)" : "transparent", color: autoRefresh ? "var(--profit)" : "var(--text-faint)", fontSize: 13, cursor: "pointer" }}>
             {autoRefresh ? "⟳ Auto On" : "⟳ Auto Off"}
+          </button>
+          <button onClick={() => setAutoAlert(a => !a)}
+            style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${autoAlert ? "rgba(139,92,246,0.4)" : "var(--border)"}`, background: autoAlert ? "rgba(139,92,246,0.08)" : "transparent", color: autoAlert ? "#a78bfa" : "var(--text-faint)", fontSize: 13, cursor: "pointer" }}>
+            {autoAlert ? "🤖 Auto-Alert On" : "🤖 Auto-Alert Off"}
           </button>
           <button onClick={() => load()} disabled={loading}
             style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", fontSize: 13, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
