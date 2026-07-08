@@ -1,8 +1,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
-import { StatCard } from "@/components/ui/StatCard";
-import { Badge, Spinner } from "@/components/ui/Badge";
+import { StatCard } from "@/components/ui";
+import { Badge, Spinner } from "@/components/ui";
 
 interface Stats { totalUsers:number; activeUsers:number; totalTrades:number; openPositions:number; totalTraders:number; activeConnections:number; recentErrors:number; }
 interface User { id:string; name:string|null; email:string|null; role:string; status:string; createdAt:string; _count:{exchangeConnections:number;copyRelationships:number;trades:number}; }

@@ -4,49 +4,47 @@ import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
   const router = useRouter();
-  const [name, setName] = useState(""); const [email, setEmail] = useState("");
-  const [password, setPassword] = useState(""); const [error, setError] = useState(""); const [loading, setLoading] = useState(false);
+  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [password,setPassword]=useState("");
+  const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
 
-  async function handleSubmit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault(); setError(""); setLoading(true);
-    const res = await fetch("/api/auth/register", { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name,email,password}) });
-    const data = await res.json(); setLoading(false);
-    if (!res.ok) { setError(data.error ?? "Something went wrong"); return; }
+    const res = await fetch("/api/auth/register",{ method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({name,email,password}) });
+    const d = await res.json(); setLoading(false);
+    if(!res.ok){ setError(d.error??"Something went wrong"); return; }
     router.push("/login");
   }
 
-  const inputStyle: React.CSSProperties = {
-    marginTop:6, width:"100%", background:"var(--bg-input)", border:"1px solid var(--border)",
-    borderRadius:8, padding:"9px 12px", color:"var(--text)", fontSize:14, boxSizing:"border-box"
-  };
-
   return (
     <main style={{ minHeight:"100vh", background:"var(--bg)", display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-      <div style={{ width:"100%", maxWidth:360, background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:16, padding:32 }}>
-        <h1 style={{ color:"var(--text)", fontSize:22, fontWeight:600, margin:"0 0 24px" }}>Create account</h1>
-        <form onSubmit={handleSubmit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
+      <div className="card animate-fade" style={{ width:"100%", maxWidth:380, padding:36 }}>
+        <div style={{ marginBottom:28 }}>
+          <span style={{ fontWeight:800, fontSize:20 }}>Copy</span>
+          <span style={{ fontWeight:800, fontSize:20, color:"var(--accent-light)" }}>Trade</span>
+          <p style={{ color:"var(--text-muted)", fontSize:13, marginTop:6 }}>Create your account</p>
+        </div>
+
+        <form onSubmit={submit} style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div>
-            <label style={{ color:"var(--text-muted)", fontSize:13 }}>Name</label>
-            <input required value={name} onChange={e=>setName(e.target.value)} style={inputStyle} />
+            <label style={{ color:"var(--text-muted)", fontSize:12, fontWeight:500 }}>Name</label>
+            <input required value={name} onChange={e=>setName(e.target.value)} className="input" style={{ marginTop:5 }} />
           </div>
           <div>
-            <label style={{ color:"var(--text-muted)", fontSize:13 }}>Email</label>
-            <input type="email" required value={email} onChange={e=>setEmail(e.target.value)} style={inputStyle} />
+            <label style={{ color:"var(--text-muted)", fontSize:12, fontWeight:500 }}>Email</label>
+            <input type="email" required value={email} onChange={e=>setEmail(e.target.value)} className="input" style={{ marginTop:5 }} />
           </div>
           <div>
-            <label style={{ color:"var(--text-muted)", fontSize:13 }}>Password</label>
-            <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} style={inputStyle} />
-            <p style={{ color:"var(--text-faint)", fontSize:11, marginTop:4 }}>Min 10 chars, one uppercase, one number.</p>
+            <label style={{ color:"var(--text-muted)", fontSize:12, fontWeight:500 }}>Password</label>
+            <input type="password" required value={password} onChange={e=>setPassword(e.target.value)} className="input" style={{ marginTop:5 }} />
+            <p style={{ color:"var(--text-faint)", fontSize:11, marginTop:5 }}>Min 10 chars · one uppercase · one number</p>
           </div>
-          {error && <p style={{ color:"var(--loss)", fontSize:13, margin:0 }}>{error}</p>}
-          <button type="submit" disabled={loading}
-            style={{ background:"var(--accent)", color:"#fff", border:"none", borderRadius:8,
-                     padding:"10px", fontSize:14, fontWeight:500, cursor:"pointer", opacity:loading?0.6:1 }}>
-            {loading ? "Creating…" : "Create account"}
+          {error && <p style={{ color:"var(--loss)", fontSize:12, padding:"8px 12px", background:"rgba(255,68,102,0.08)", borderRadius:8, border:"1px solid rgba(255,68,102,0.2)" }}>{error}</p>}
+          <button type="submit" disabled={loading} className="btn btn-primary" style={{ width:"100%", padding:"11px", marginTop:4 }}>
+            {loading?"Creating…":"Create Account"}
           </button>
         </form>
-        <p style={{ color:"var(--text-faint)", fontSize:13, marginTop:20, textAlign:"center" }}>
-          Already have an account? <a href="/login" style={{ color:"var(--accent)" }}>Sign in</a>
+        <p style={{ color:"var(--text-faint)", fontSize:12, textAlign:"center", marginTop:20 }}>
+          Already have an account? <a href="/login" style={{ color:"var(--accent-light)", textDecoration:"none" }}>Sign in</a>
         </p>
       </div>
     </main>

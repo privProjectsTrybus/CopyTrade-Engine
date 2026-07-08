@@ -6,8 +6,8 @@ import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   LineChart, Line, CartesianGrid,
 } from "recharts";
-import { Badge, Spinner } from "@/components/ui/Badge";
-import { StatCard } from "@/components/ui/StatCard";
+import { Badge, Spinner } from "@/components/ui";
+import { StatCard } from "@/components/ui";
 
 interface MonthlyReturn { month: string; roi: number; }
 

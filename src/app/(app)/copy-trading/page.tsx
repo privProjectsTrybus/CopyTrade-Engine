@@ -2,7 +2,7 @@
 // src/app/(app)/copy-trading/page.tsx
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Badge, Spinner } from "@/components/ui/Badge";
+import { Badge, Spinner } from "@/components/ui";
 
 interface Trader {
   id: string;

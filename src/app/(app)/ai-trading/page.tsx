@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { Badge, Spinner } from "@/components/ui/Badge";
+import { Badge, Spinner } from "@/components/ui";
 import { STRATEGY_FUNCTIONS, DEFAULT_SYMBOLS } from "@/lib/strategies";
 import type { StrategySignal } from "@/lib/strategies";
 

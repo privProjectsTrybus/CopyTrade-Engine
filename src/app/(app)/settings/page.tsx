@@ -1,7 +1,7 @@
 "use client";
 // src/app/(app)/settings/page.tsx
 import { useEffect, useState } from "react";
-import { Spinner } from "@/components/ui/Badge";
+import { Spinner } from "@/components/ui";
 
 interface RiskProfile {
   maxAccountExposurePct: number;

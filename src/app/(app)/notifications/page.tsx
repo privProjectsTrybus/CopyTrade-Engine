@@ -1,151 +1,124 @@
 "use client";
 import { useEffect, useState } from "react";
 import { Spinner } from "@/components/ui/Badge";
+import { Toggle } from "@/components/ui/Toggle";
 
 interface Settings {
-  browserEnabled: boolean; emailEnabled: boolean;
-  telegramEnabled: boolean; telegramChatId: string | null;
-  telegramBotToken: string | null;
-  discordEnabled: boolean; discordWebhookUrl: string | null;
-  onTradeOpen: boolean; onTradeClose: boolean; onStopLossHit: boolean;
-  onRiskBreach: boolean; onExchangeError: boolean; onAiSignal: boolean;
+  browserEnabled:boolean; emailEnabled:boolean;
+  telegramEnabled:boolean; telegramChatId:string|null; telegramBotToken:string|null;
+  discordEnabled:boolean; discordWebhookUrl:string|null;
+  onTradeOpen:boolean; onTradeClose:boolean; onStopLossHit:boolean;
+  onRiskBreach:boolean; onExchangeError:boolean; onAiSignal:boolean;
 }
 
-function Toggle({ label, desc, checked, onChange }: { label: string; desc?: string; checked: boolean; onChange: (v: boolean) => void }) {
+function SettingRow({ label, desc, checked, onChange }: { label:string; desc?:string; checked:boolean; onChange:(v:boolean)=>void }) {
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "12px 0", borderBottom: "1px solid var(--border)" }}>
-      <div>
-        <p style={{ color: "var(--text)", fontSize: 14, margin: 0 }}>{label}</p>
-        {desc && <p style={{ color: "var(--text-faint)", fontSize: 12, margin: "2px 0 0" }}>{desc}</p>}
+    <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", padding:"13px 0", borderBottom:"1px solid var(--border)" }}>
+      <div style={{ flex:1, paddingRight:16 }}>
+        <p style={{ color:"var(--text)", fontSize:13, fontWeight:500 }}>{label}</p>
+        {desc && <p style={{ color:"var(--text-faint)", fontSize:12, marginTop:2, lineHeight:1.4 }}>{desc}</p>}
       </div>
-      <button onClick={() => onChange(!checked)}
-        style={{ width: 44, height: 24, borderRadius: 999, border: "none", cursor: "pointer", position: "relative", background: checked ? "var(--accent)" : "var(--bg-hover)", transition: "background 0.2s", flexShrink: 0 }}>
-        <span style={{ position: "absolute", top: 3, width: 18, height: 18, background: "#fff", borderRadius: "50%", transition: "transform 0.2s", transform: checked ? "translateX(22px)" : "translateX(3px)", boxShadow: "0 1px 3px rgba(0,0,0,0.3)" }} />
-      </button>
+      <Toggle checked={checked} onChange={onChange} />
     </div>
   );
 }
 
-const inp: React.CSSProperties = { marginTop: 6, width: "100%", background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 12px", color: "var(--text)", fontSize: 13, boxSizing: "border-box" };
-const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12, padding: 20 };
-
 export default function NotificationsPage() {
-  const [settings, setSettings] = useState<Settings | null>(null);
+  const [s, setS] = useState<Settings|null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [testing, setTesting] = useState(false);
-  const [testResult, setTestResult] = useState<{ ok: boolean; msg: string } | null>(null);
+  const [testMsg, setTestMsg] = useState<{ok:boolean;text:string}|null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     fetch("/api/notifications/settings")
       .then(r => r.json())
-      .then(d => {
-        if (d.error) setError(d.error);
-        else setSettings(d);
-        setLoading(false);
-      })
-      .catch(() => { setError("Network error loading settings."); setLoading(false); });
+      .then(d => { if(d.error) setError(d.error); else setS(d); setLoading(false); })
+      .catch(() => { setError("Network error"); setLoading(false); });
   }, []);
 
-  function set<K extends keyof Settings>(key: K, val: Settings[K]) {
-    setSettings(s => s ? { ...s, [key]: val } : s);
-    setSaved(false);
-  }
+  const set = <K extends keyof Settings>(k:K, v:Settings[K]) => { setS(p => p?{...p,[k]:v}:p); setSaved(false); };
 
   async function save() {
-    if (!settings) return;
+    if(!s) return;
     setSaving(true);
-    const res = await fetch("/api/notifications/settings", {
-      method: "PUT", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(settings),
-    });
+    const res = await fetch("/api/notifications/settings",{ method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(s) });
     setSaving(false);
-    if (res.ok) { setSaved(true); setTimeout(() => setSaved(false), 3000); }
-    else setError("Failed to save");
+    if(res.ok){ setSaved(true); setTimeout(()=>setSaved(false),3000); }
   }
 
-  async function sendTest() {
-    setTesting(true); setTestResult(null);
-    // Save first so the token/chatId is persisted before testing
-    if (settings) {
-      await fetch("/api/notifications/settings", {
-        method: "PUT", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(settings),
-      });
-    }
-    const res = await fetch("/api/notifications/test", { method: "POST" });
-    const data = await res.json();
+  async function test() {
+    if(!s) return;
+    // Save first
+    await fetch("/api/notifications/settings",{ method:"PUT", headers:{"Content-Type":"application/json"}, body:JSON.stringify(s) });
+    setTesting(true); setTestMsg(null);
+    const res = await fetch("/api/notifications/test",{ method:"POST" });
+    const d = await res.json();
     setTesting(false);
-    setTestResult({ ok: res.ok, msg: res.ok ? "✓ Test sent! Check your Telegram." : data.error ?? "Failed" });
-    setTimeout(() => setTestResult(null), 5000);
+    setTestMsg({ ok:res.ok, text: res.ok ? "✓ Test sent! Check Telegram." : d.error??"Failed" });
+    setTimeout(()=>setTestMsg(null), 5000);
   }
 
-  if (loading) return <div style={{ display: "flex", justifyContent: "center", padding: 80 }}><Spinner size="lg" /></div>;
+  if(loading) return <div style={{ display:"flex",justifyContent:"center",padding:80 }}><Spinner size="lg"/></div>;
 
-  if (error && !settings) return (
-    <div style={{ padding: 24, maxWidth: 600, margin: "0 auto" }}>
-      <div style={{ ...card, borderColor: "rgba(234,57,67,0.3)" }}>
-        <p style={{ color: "var(--loss)", margin: 0 }}>⚠ {error}</p>
-        <button onClick={() => window.location.reload()} style={{ marginTop: 12, padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", fontSize: 13, cursor: "pointer" }}>
-          Retry
-        </button>
+  if(error && !s) return (
+    <div className="page">
+      <div className="card" style={{ padding:24, borderColor:"rgba(255,68,102,0.3)" }}>
+        <p style={{ color:"var(--loss)" }}>⚠ {error}</p>
+        <button onClick={()=>window.location.reload()} className="btn btn-ghost" style={{ marginTop:12 }}>Retry</button>
       </div>
     </div>
   );
-
-  if (!settings) return null;
+  if(!s) return null;
 
   return (
-    <div style={{ padding: 24, maxWidth: 640, margin: "0 auto" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+    <div className="page" style={{ maxWidth:640 }}>
+      <div className="page-header" style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
         <div>
-          <h1 style={{ color: "var(--text)", fontSize: 22, fontWeight: 600, margin: 0 }}>Notifications</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 4 }}>Configure how you get alerted about signals and trades</p>
+          <h1 className="page-title">Notifications</h1>
+          <p className="page-sub">Configure alerts for signals, trades, and risk events</p>
         </div>
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          {testResult && <span style={{ color: testResult.ok ? "var(--profit)" : "var(--loss)", fontSize: 13 }}>{testResult.msg}</span>}
-          <button onClick={sendTest} disabled={testing || !settings.telegramEnabled}
-            style={{ padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", fontSize: 13, cursor: "pointer", opacity: testing || !settings.telegramEnabled ? 0.4 : 1 }}>
-            {testing ? "Sending…" : "Send Test"}
+        <div style={{ display:"flex",gap:8,alignItems:"center" }}>
+          {testMsg && <span style={{ fontSize:12,color:testMsg.ok?"var(--profit)":"var(--loss)" }}>{testMsg.text}</span>}
+          <button onClick={test} disabled={testing||!s.telegramEnabled} className="btn btn-ghost">
+            {testing?"Sending…":"Send Test"}
           </button>
-          <button onClick={save} disabled={saving}
-            style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 500, cursor: "pointer", opacity: saving ? 0.6 : 1 }}>
-            {saving ? "Saving…" : saved ? "✓ Saved" : "Save"}
+          <button onClick={save} disabled={saving} className="btn btn-primary">
+            {saving?"Saving…":saved?"✓ Saved":"Save"}
           </button>
         </div>
       </div>
 
       {/* Telegram */}
-      <div style={{ ...card, marginBottom: 16 }}>
-        <h2 style={{ color: "var(--text)", fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>📱 Telegram</h2>
-        <p style={{ color: "var(--text-faint)", fontSize: 12, margin: "0 0 12px" }}>Get instant alerts on your phone when signals appear.</p>
-        <Toggle label="Enable Telegram alerts" checked={settings.telegramEnabled} onChange={v => set("telegramEnabled", v)} />
-        {settings.telegramEnabled && (
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 12 }}>
+      <div className="card animate-fade" style={{ padding:20,marginBottom:14 }}>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:14 }}>
+          <div>
+            <p style={{ color:"var(--text)",fontSize:14,fontWeight:600 }}>📱 Telegram</p>
+            <p style={{ color:"var(--text-faint)",fontSize:12,marginTop:2 }}>Instant alerts straight to your phone</p>
+          </div>
+          <Toggle checked={s.telegramEnabled} onChange={v=>set("telegramEnabled",v)} />
+        </div>
+        {s.telegramEnabled && (
+          <div className="animate-fade" style={{ display:"flex",flexDirection:"column",gap:12 }}>
             <div>
-              <label style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                Bot Token <span style={{ color: "var(--text-faint)" }}>— from @BotFather on Telegram</span>
-              </label>
-              <input type="password" value={settings.telegramBotToken ?? ""} onChange={e => set("telegramBotToken", e.target.value)}
-                placeholder="1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style={inp} />
+              <label style={{ color:"var(--text-muted)",fontSize:12,fontWeight:500 }}>Bot Token</label>
+              <input className="input" type="password" value={s.telegramBotToken??""} onChange={e=>set("telegramBotToken",e.target.value)}
+                placeholder="1234567890:AAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx" style={{ marginTop:5 }} />
             </div>
             <div>
-              <label style={{ color: "var(--text-muted)", fontSize: 13 }}>
-                Your Chat ID <span style={{ color: "var(--text-faint)" }}>— send /start to your bot, then message @userinfobot</span>
-              </label>
-              <input value={settings.telegramChatId ?? ""} onChange={e => set("telegramChatId", e.target.value)}
-                placeholder="123456789" style={inp} />
+              <label style={{ color:"var(--text-muted)",fontSize:12,fontWeight:500 }}>Chat ID</label>
+              <input className="input" value={s.telegramChatId??""} onChange={e=>set("telegramChatId",e.target.value)}
+                placeholder="123456789" style={{ marginTop:5 }} />
             </div>
-            <div style={{ background: "rgba(59,130,246,0.08)", border: "1px solid rgba(59,130,246,0.2)", borderRadius: 8, padding: "10px 14px", fontSize: 12, color: "rgba(147,197,253,1)" }}>
-              <p style={{ margin: "0 0 4px", fontWeight: 600 }}>Setup steps</p>
-              <ol style={{ margin: 0, paddingLeft: 16, color: "rgba(147,197,253,0.8)", lineHeight: 1.8 }}>
-                <li>Open Telegram → search <b>@BotFather</b> → send <code>/newbot</code></li>
-                <li>Copy the token it gives you → paste above</li>
-                <li>Search your new bot → send it <code>/start</code></li>
-                <li>Search <b>@userinfobot</b> → send any message → copy the ID it replies with</li>
-                <li>Click Save → Send Test</li>
+            <div style={{ background:"rgba(99,102,241,0.06)",border:"1px solid rgba(99,102,241,0.15)",borderRadius:10,padding:"12px 14px" }}>
+              <p style={{ color:"var(--accent-light)",fontSize:12,fontWeight:600,marginBottom:6 }}>How to set up</p>
+              <ol style={{ color:"var(--text-muted)",fontSize:12,paddingLeft:16,lineHeight:2 }}>
+                <li>Telegram → search <b>@BotFather</b> → send <code>/newbot</code> → copy the token</li>
+                <li>Open your new bot → send <code>/start</code></li>
+                <li>Search <b>@userinfobot</b> → send any message → copy the ID number</li>
+                <li>Paste both above → Save → Send Test</li>
               </ol>
             </div>
           </div>
@@ -153,37 +126,47 @@ export default function NotificationsPage() {
       </div>
 
       {/* Discord */}
-      <div style={{ ...card, marginBottom: 16 }}>
-        <h2 style={{ color: "var(--text)", fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>💬 Discord</h2>
-        <p style={{ color: "var(--text-faint)", fontSize: 12, margin: "0 0 12px" }}>Post alerts to a Discord channel via webhook.</p>
-        <Toggle label="Enable Discord alerts" checked={settings.discordEnabled} onChange={v => set("discordEnabled", v)} />
-        {settings.discordEnabled && (
-          <div style={{ marginTop: 14 }}>
-            <label style={{ color: "var(--text-muted)", fontSize: 13 }}>Webhook URL</label>
-            <input value={settings.discordWebhookUrl ?? ""} onChange={e => set("discordWebhookUrl", e.target.value)}
-              placeholder="https://discord.com/api/webhooks/…" style={inp} />
-            <p style={{ color: "var(--text-faint)", fontSize: 11, marginTop: 6 }}>Discord server → Settings → Integrations → Webhooks → New Webhook → Copy URL</p>
+      <div className="card animate-fade" style={{ padding:20,marginBottom:14 }}>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom: s.discordEnabled?14:0 }}>
+          <div>
+            <p style={{ color:"var(--text)",fontSize:14,fontWeight:600 }}>💬 Discord</p>
+            <p style={{ color:"var(--text-faint)",fontSize:12,marginTop:2 }}>Post to a Discord channel via webhook</p>
+          </div>
+          <Toggle checked={s.discordEnabled} onChange={v=>set("discordEnabled",v)} />
+        </div>
+        {s.discordEnabled && (
+          <div className="animate-fade">
+            <label style={{ color:"var(--text-muted)",fontSize:12,fontWeight:500 }}>Webhook URL</label>
+            <input className="input" value={s.discordWebhookUrl??""} onChange={e=>set("discordWebhookUrl",e.target.value)}
+              placeholder="https://discord.com/api/webhooks/…" style={{ marginTop:5 }} />
+            <p style={{ color:"var(--text-faint)",fontSize:11,marginTop:6 }}>
+              Discord server → Settings → Integrations → Webhooks → New Webhook → Copy URL
+            </p>
           </div>
         )}
       </div>
 
       {/* Email */}
-      <div style={{ ...card, marginBottom: 16 }}>
-        <h2 style={{ color: "var(--text)", fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>✉️ Email</h2>
-        <p style={{ color: "var(--text-faint)", fontSize: 12, margin: "0 0 12px" }}>Requires RESEND_API_KEY in Vercel environment variables.</p>
-        <Toggle label="Enable email alerts" checked={settings.emailEnabled} onChange={v => set("emailEnabled", v)} />
+      <div className="card animate-fade" style={{ padding:20,marginBottom:14 }}>
+        <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between" }}>
+          <div>
+            <p style={{ color:"var(--text)",fontSize:14,fontWeight:600 }}>✉️ Email</p>
+            <p style={{ color:"var(--text-faint)",fontSize:12,marginTop:2 }}>Requires RESEND_API_KEY in Vercel env vars</p>
+          </div>
+          <Toggle checked={s.emailEnabled} onChange={v=>set("emailEnabled",v)} />
+        </div>
       </div>
 
       {/* Events */}
-      <div style={{ ...card }}>
-        <h2 style={{ color: "var(--text)", fontSize: 15, fontWeight: 600, margin: "0 0 4px" }}>Alert Events</h2>
-        <p style={{ color: "var(--text-faint)", fontSize: 12, margin: "0 0 4px" }}>Choose which events trigger a notification.</p>
-        <Toggle label="Trade opens" checked={settings.onTradeOpen} onChange={v => set("onTradeOpen", v)} />
-        <Toggle label="Trade closes" checked={settings.onTradeClose} onChange={v => set("onTradeClose", v)} />
-        <Toggle label="Stop loss hit" checked={settings.onStopLossHit} onChange={v => set("onStopLossHit", v)} />
-        <Toggle label="Risk limit breached" checked={settings.onRiskBreach} onChange={v => set("onRiskBreach", v)} />
-        <Toggle label="Exchange error" checked={settings.onExchangeError} onChange={v => set("onExchangeError", v)} />
-        <Toggle label="AI signal generated" checked={settings.onAiSignal} onChange={v => set("onAiSignal", v)} />
+      <div className="card animate-fade" style={{ padding:20 }}>
+        <p style={{ color:"var(--text)",fontSize:14,fontWeight:600,marginBottom:4 }}>Alert Events</p>
+        <p style={{ color:"var(--text-faint)",fontSize:12,marginBottom:4 }}>Choose what triggers a notification</p>
+        <SettingRow label="Trade opens"            checked={s.onTradeOpen}      onChange={v=>set("onTradeOpen",v)} />
+        <SettingRow label="Trade closes"           checked={s.onTradeClose}     onChange={v=>set("onTradeClose",v)} />
+        <SettingRow label="Stop loss hit"          checked={s.onStopLossHit}    onChange={v=>set("onStopLossHit",v)} />
+        <SettingRow label="Risk limit breached"    checked={s.onRiskBreach}     onChange={v=>set("onRiskBreach",v)} />
+        <SettingRow label="Exchange error"         checked={s.onExchangeError}  onChange={v=>set("onExchangeError",v)} />
+        <SettingRow label="AI signal generated"    checked={s.onAiSignal}       onChange={v=>set("onAiSignal",v)} />
       </div>
     </div>
   );

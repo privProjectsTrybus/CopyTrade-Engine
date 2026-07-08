@@ -5,8 +5,8 @@ import {
   LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, Tooltip,
   XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend,
 } from "recharts";
-import { StatCard } from "@/components/ui/StatCard";
-import { Badge, Spinner } from "@/components/ui/Badge";
+import { StatCard } from "@/components/ui";
+import { Badge, Spinner } from "@/components/ui";
 
 interface Analytics {
   totalRealizedPnl: number;

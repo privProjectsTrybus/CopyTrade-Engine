@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { StatCard } from "@/components/ui/StatCard";
-import { Badge, Spinner } from "@/components/ui/Badge";
+import { StatCard } from "@/components/ui";
+import { Badge, Spinner } from "@/components/ui";
 
 interface Connection {
   id: string; exchange: "BINANCE"|"BYBIT"|"OKX"; label: string;

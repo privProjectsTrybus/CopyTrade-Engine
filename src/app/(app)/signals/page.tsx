@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Spinner, Badge } from "@/components/ui/Badge";
+import { Spinner, Badge } from "@/components/ui";
 import type { RealTrader, RealPosition } from "@/app/api/real-traders/route";
 
 // ── Sound alert (Web Audio API, no external files) ───────────────────────────
