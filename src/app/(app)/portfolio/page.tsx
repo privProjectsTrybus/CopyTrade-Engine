@@ -1,189 +1,102 @@
 "use client";
-// src/app/(app)/portfolio/page.tsx
 import { useEffect, useState } from "react";
-import {
-  LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, Tooltip,
-  XAxis, YAxis, CartesianGrid, ResponsiveContainer, Legend,
-} from "recharts";
-import { StatCard } from "@/components/ui";
-import { Badge, Spinner } from "@/components/ui";
-
-interface Analytics {
-  totalRealizedPnl: number;
-  totalRoi: number;
-  unrealizedPnl: number;
-  openPositionCount: number;
-  equityCurve: { date: string; equity: number }[];
-  monthlyReturns: { month: string; pnl: number; returnPct: number }[];
-  sharpeRatio: number;
-  sortinoRatio: number;
-  maxDrawdown: number;
-  maxDrawdownDuration: number;
-  winRate: number;
-  avgWin: number;
-  avgLoss: number;
-  profitFactor: number;
-  totalTrades: number;
-  winCount: number;
-  lossCount: number;
-  assetAllocation: { symbol: string; count: number; pnl: number }[];
-  openPositions: Array<{
-    symbol: string; side: string; size: number;
-    entryPrice: number; markPrice: number; unrealizedPnl: number; leverage: number;
-  }>;
-}
-
-const PIE_COLORS = ["#3b82f6", "#16c784", "#8b5cf6", "#f59e0b", "#ea3943", "#06b6d4", "#ec4899", "#84cc16"];
-
-const CustomTooltip = ({ active, payload, label }: any) => {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-sm">
-      <p className="text-zinc-400 text-xs mb-1">{label}</p>
-      {payload.map((p: any, i: number) => (
-        <p key={i} style={{ color: p.color }}>{p.name}: {typeof p.value === "number" ? p.value.toFixed(2) : p.value}</p>
-      ))}
-    </div>
-  );
-};
+import { LineChart, Line, BarChart, Bar, Cell, PieChart, Pie, Tooltip, XAxis, YAxis, CartesianGrid, ResponsiveContainer } from "recharts";
+import { StatCard } from "@/components/ui/StatCard";
+import { Badge, Spinner } from "@/components/ui/Badge";
 
 export default function PortfolioPage() {
-  const [data, setData] = useState<Analytics | null>(null);
+  const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch("/api/portfolio/analytics")
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => { setData(d); setLoading(false); });
-  }, []);
+    fetch("/api/portfolio/analytics").then(r=>r.ok?r.json():null).then(d=>{setData(d);setLoading(false);});
+  },[]);
 
-  if (loading) return <div className="flex items-center justify-center h-96"><Spinner size="lg" /></div>;
+  const COLORS = ["#6366f1","#00d4a0","#a78bfa","#f59e0b","#ff4466","#06b6d4","#ec4899","#84cc16"];
+  const TT = ({ active,payload,label }:any) => !active||!payload?.length?null:(
+    <div className="card" style={{padding:"8px 12px",fontSize:12}}>
+      <p style={{color:"var(--text-muted)",marginBottom:4}}>{label}</p>
+      {payload.map((p:any,i:number)=><p key={i} style={{color:p.color}}>{p.name}: {typeof p.value==="number"?p.value.toFixed(2):p.value}</p>)}
+    </div>
+  );
 
-  const isEmpty = !data || data.totalTrades === 0;
+  if(loading) return <div style={{display:"flex",justifyContent:"center",padding:80}}><Spinner size="lg"/></div>;
+
+  const empty = !data || data.totalTrades===0;
 
   return (
-    <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div>
-        <h1 className="text-white text-2xl font-semibold">Portfolio Analytics</h1>
-        <p className="text-zinc-500 text-sm mt-0.5">Performance computed from all closed positions</p>
-      </div>
+    <div className="page">
+      <div className="page-header"><h1 className="page-title">Portfolio Analytics</h1><p className="page-sub">Performance computed from all closed positions</p></div>
 
-      {isEmpty ? (
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-16 text-center">
-          <p className="text-zinc-400">No closed positions yet.</p>
-          <p className="text-zinc-600 text-sm mt-1">Analytics will appear once your first trade closes.</p>
+      {empty ? (
+        <div className="card" style={{padding:60,textAlign:"center"}}>
+          <p style={{color:"var(--text-muted)"}}>No closed positions yet.</p>
+          <p style={{color:"var(--text-faint)",fontSize:13,marginTop:6}}>Analytics appear once your first trade closes.</p>
         </div>
       ) : (
         <>
-          {/* Top stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard
-              label="Total Realized PnL"
-              value={`${data.totalRealizedPnl >= 0 ? "+" : ""}$${data.totalRealizedPnl.toFixed(2)}`}
-              positive={data.totalRealizedPnl > 0} negative={data.totalRealizedPnl < 0}
-            />
-            <StatCard
-              label="Total ROI"
-              value={`${data.totalRoi >= 0 ? "+" : ""}${data.totalRoi.toFixed(2)}%`}
-              positive={data.totalRoi > 0} negative={data.totalRoi < 0}
-            />
-            <StatCard
-              label="Unrealized PnL"
-              value={`${data.unrealizedPnl >= 0 ? "+" : ""}$${data.unrealizedPnl.toFixed(2)}`}
-              positive={data.unrealizedPnl > 0} negative={data.unrealizedPnl < 0}
-              subtext={`${data.openPositionCount} open positions`}
-            />
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:14}}>
+            <StatCard label="Total Realized PnL" value={`${data.totalRealizedPnl>=0?"+":""}$${data.totalRealizedPnl.toFixed(2)}`} positive={data.totalRealizedPnl>0} negative={data.totalRealizedPnl<0} />
+            <StatCard label="Total ROI" value={`${data.totalRoi>=0?"+":""}${data.totalRoi.toFixed(2)}%`} positive={data.totalRoi>0} negative={data.totalRoi<0} />
+            <StatCard label="Unrealized PnL" value={`${data.unrealizedPnl>=0?"+":""}$${data.unrealizedPnl.toFixed(2)}`} positive={data.unrealizedPnl>0} negative={data.unrealizedPnl<0} subtext={`${data.openPositionCount} open`} />
             <StatCard label="Total Trades" value={data.totalTrades} subtext={`${data.winCount}W / ${data.lossCount}L`} />
           </div>
-
-          {/* Risk metrics */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Sharpe Ratio" value={data.sharpeRatio.toFixed(2)}
-              positive={data.sharpeRatio > 1} negative={data.sharpeRatio < 0}
-              subtext="> 1.0 is good" />
-            <StatCard label="Sortino Ratio" value={data.sortinoRatio.toFixed(2)}
-              positive={data.sortinoRatio > 1} negative={data.sortinoRatio < 0}
-              subtext="> 1.0 is good" />
-            <StatCard label="Max Drawdown" value={`-${data.maxDrawdown.toFixed(2)}%`} negative={data.maxDrawdown > 10}
-              subtext={`${data.maxDrawdownDuration}d duration`} />
-            <StatCard label="Win Rate" value={`${data.winRate.toFixed(1)}%`}
-              positive={data.winRate > 55} negative={data.winRate < 45} />
+          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:12,marginBottom:20}}>
+            <StatCard label="Sharpe Ratio" value={data.sharpeRatio.toFixed(2)} positive={data.sharpeRatio>1} negative={data.sharpeRatio<0} subtext="> 1.0 is good" />
+            <StatCard label="Sortino Ratio" value={data.sortinoRatio.toFixed(2)} positive={data.sortinoRatio>1} negative={data.sortinoRatio<0} subtext="> 1.0 is good" />
+            <StatCard label="Max Drawdown" value={`-${data.maxDrawdown.toFixed(2)}%`} negative={data.maxDrawdown>10} subtext={`${data.maxDrawdownDuration}d`} />
+            <StatCard label="Win Rate" value={`${data.winRate.toFixed(1)}%`} positive={data.winRate>55} negative={data.winRate<45} />
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <StatCard label="Avg Win" value={`+$${data.avgWin.toFixed(2)}`} positive />
-            <StatCard label="Avg Loss" value={`-$${data.avgLoss.toFixed(2)}`} negative />
-            <StatCard label="Profit Factor" value={data.profitFactor === Infinity ? "∞" : data.profitFactor.toFixed(2)}
-              positive={data.profitFactor > 1.5} negative={data.profitFactor < 1}
-              subtext="> 1.5 is good" />
-            <StatCard label="Open Positions" value={data.openPositionCount} />
-          </div>
-
-          {/* Equity curve */}
-          {data.equityCurve.length > 1 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <h2 className="text-white font-medium mb-4">Equity Curve</h2>
-              <ResponsiveContainer width="100%" height={220}>
+          {data.equityCurve?.length>1 && (
+            <div className="card animate-fade" style={{padding:20,marginBottom:14}}>
+              <p className="section-title">Equity Curve</p>
+              <ResponsiveContainer width="100%" height={200}>
                 <LineChart data={data.equityCurve}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                  <XAxis dataKey="date" stroke="#52525b" tick={{ fontSize: 10 }}
-                    tickFormatter={(v: string) => v.slice(5)} interval="preserveStartEnd" />
-                  <YAxis stroke="#52525b" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `$${v.toFixed(0)}`} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Line type="monotone" dataKey="equity" name="Equity" stroke="#3b82f6"
-                    strokeWidth={2} dot={false} activeDot={{ r: 3 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="date" stroke="var(--text-faint)" tick={{fontSize:10}} tickFormatter={(v:string)=>v.slice(5)} interval="preserveStartEnd" />
+                  <YAxis stroke="var(--text-faint)" tick={{fontSize:10}} tickFormatter={(v:number)=>`$${v.toFixed(0)}`} />
+                  <Tooltip content={<TT />} />
+                  <Line type="monotone" dataKey="equity" name="Equity" stroke="var(--accent-light)" strokeWidth={2} dot={false} activeDot={{r:3}} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
           )}
 
-          {/* Monthly returns + asset allocation side by side */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {data.monthlyReturns.length > 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-                <h2 className="text-white font-medium mb-4">Monthly Returns</h2>
-                <ResponsiveContainer width="100%" height={200}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14,marginBottom:14}}>
+            {data.monthlyReturns?.length>0 && (
+              <div className="card animate-fade" style={{padding:20}}>
+                <p className="section-title">Monthly Returns</p>
+                <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={data.monthlyReturns}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#27272a" />
-                    <XAxis dataKey="month" stroke="#52525b" tick={{ fontSize: 10 }}
-                      tickFormatter={(v: string) => v.slice(5)} />
-                    <YAxis stroke="#52525b" tick={{ fontSize: 10 }} tickFormatter={(v: number) => `${v.toFixed(1)}%`} />
-                    <Tooltip content={<CustomTooltip />} />
-                    <Bar dataKey="returnPct" name="Return %" radius={[3, 3, 0, 0]}>
-                      {data.monthlyReturns.map((entry, i) => (
-                        <Cell key={i} fill={entry.returnPct >= 0 ? "#16c784" : "#ea3943"} />
-                      ))}
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="month" stroke="var(--text-faint)" tick={{fontSize:10}} tickFormatter={(v:string)=>v.slice(5)} />
+                    <YAxis stroke="var(--text-faint)" tick={{fontSize:10}} tickFormatter={(v:number)=>`${v.toFixed(1)}%`} />
+                    <Tooltip content={<TT />} />
+                    <Bar dataKey="returnPct" name="Return %" radius={[4,4,0,0]}>
+                      {data.monthlyReturns.map((_:any,i:number)=><Cell key={i} fill={data.monthlyReturns[i].returnPct>=0?"var(--profit)":"var(--loss)"} />)}
                     </Bar>
                   </BarChart>
                 </ResponsiveContainer>
               </div>
             )}
-
-            {data.assetAllocation.length > 0 && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-                <h2 className="text-white font-medium mb-4">Asset Allocation (by trades)</h2>
-                <div className="flex items-center gap-4">
-                  <ResponsiveContainer width="50%" height={180}>
-                    <PieChart>
-                      <Pie data={data.assetAllocation} dataKey="count" nameKey="symbol"
-                        cx="50%" cy="50%" outerRadius={70} strokeWidth={0}>
-                        {data.assetAllocation.map((_, i) => (
-                          <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                        ))}
-                      </Pie>
-                      <Tooltip formatter={(v: any) => [v, ""]} />
-                    </PieChart>
+            {data.assetAllocation?.length>0 && (
+              <div className="card animate-fade" style={{padding:20}}>
+                <p className="section-title">Asset Allocation</p>
+                <div style={{display:"flex",alignItems:"center",gap:16}}>
+                  <ResponsiveContainer width="50%" height={160}>
+                    <PieChart><Pie data={data.assetAllocation} dataKey="count" nameKey="symbol" cx="50%" cy="50%" outerRadius={65} strokeWidth={0}>
+                      {data.assetAllocation.map((_:any,i:number)=><Cell key={i} fill={COLORS[i%COLORS.length]} />)}
+                    </Pie><Tooltip formatter={(v:any)=>[v,""]} /></PieChart>
                   </ResponsiveContainer>
-                  <div className="flex-1 space-y-1.5">
-                    {data.assetAllocation.map((asset, i) => (
-                      <div key={asset.symbol} className="flex items-center justify-between text-xs">
-                        <div className="flex items-center gap-1.5">
-                          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                          <span className="text-zinc-300">{asset.symbol.replace("USDT", "")}</span>
+                  <div style={{flex:1,display:"flex",flexDirection:"column",gap:6}}>
+                    {data.assetAllocation.map((a:any,i:number)=>(
+                      <div key={a.symbol} style={{display:"flex",justifyContent:"space-between",fontSize:12}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6}}>
+                          <span style={{width:8,height:8,borderRadius:"50%",background:COLORS[i%COLORS.length],flexShrink:0}} />
+                          <span style={{color:"var(--text-muted)"}}>{a.symbol.replace("USDT","")}</span>
                         </div>
-                        <span className={asset.pnl >= 0 ? "text-profit" : "text-loss"}>
-                          {asset.pnl >= 0 ? "+" : ""}${asset.pnl.toFixed(1)}
-                        </span>
+                        <span style={{color:a.pnl>=0?"var(--profit)":"var(--loss)"}}>{a.pnl>=0?"+":""}${a.pnl.toFixed(1)}</span>
                       </div>
                     ))}
                   </div>
@@ -192,42 +105,21 @@ export default function PortfolioPage() {
             )}
           </div>
 
-          {/* Open positions table */}
-          {data.openPositions.length > 0 && (
-            <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-              <h2 className="text-white font-medium mb-4">Open Positions</h2>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-zinc-500 text-xs uppercase border-b border-zinc-800">
-                      <th className="text-left pb-2">Symbol</th>
-                      <th className="text-left pb-2">Side</th>
-                      <th className="text-right pb-2">Size</th>
-                      <th className="text-right pb-2">Entry</th>
-                      <th className="text-right pb-2">Mark</th>
-                      <th className="text-right pb-2">Leverage</th>
-                      <th className="text-right pb-2">Unrealized PnL</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-zinc-800/50">
-                    {data.openPositions.map((pos, i) => (
-                      <tr key={i} className="text-zinc-300">
-                        <td className="py-2.5 font-medium text-white">{pos.symbol}</td>
-                        <td className="py-2.5">
-                          <Badge variant={pos.side === "LONG" ? "green" : "red"}>{pos.side}</Badge>
-                        </td>
-                        <td className="py-2.5 text-right">{pos.size}</td>
-                        <td className="py-2.5 text-right">${pos.entryPrice.toLocaleString()}</td>
-                        <td className="py-2.5 text-right">${pos.markPrice?.toLocaleString() ?? "—"}</td>
-                        <td className="py-2.5 text-right">{pos.leverage}x</td>
-                        <td className={`py-2.5 text-right font-medium ${pos.unrealizedPnl >= 0 ? "text-profit" : "text-loss"}`}>
-                          {pos.unrealizedPnl >= 0 ? "+" : ""}${pos.unrealizedPnl.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {data.openPositions?.length>0 && (
+            <div className="card animate-fade" style={{overflow:"hidden"}}>
+              <div className="table-header" style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 70px 120px"}}>
+                {["Symbol","Side","Entry","Mark","Lev","Unrealized PnL"].map(h=><span key={h}>{h}</span>)}
               </div>
+              {data.openPositions.map((p:any,i:number)=>(
+                <div key={i} className="table-row" style={{display:"grid",gridTemplateColumns:"1fr 80px 100px 100px 70px 120px",alignItems:"center"}}>
+                  <span style={{color:"var(--text)",fontWeight:600,fontSize:13}}>{p.symbol}</span>
+                  <Badge variant={p.side==="LONG"?"green":"red"}>{p.side}</Badge>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>${p.entryPrice.toLocaleString()}</span>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>${p.markPrice?.toLocaleString()??"-"}</span>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>{p.leverage}x</span>
+                  <span style={{color:p.unrealizedPnl>=0?"var(--profit)":"var(--loss)",fontWeight:600,fontSize:12}}>{p.unrealizedPnl>=0?"+":""}${p.unrealizedPnl.toFixed(2)}</span>
+                </div>
+              ))}
             </div>
           )}
         </>
