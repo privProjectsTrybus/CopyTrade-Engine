@@ -1,160 +1,128 @@
 import Link from "next/link";
 
 const FEATURES = [
-  { icon: "⬡", title: "Copy Trading", desc: "Mirror professional traders with configurable position sizing, risk multipliers, and symbol filters." },
-  { icon: "◈", title: "AI Strategies", desc: "4 built-in strategies: Trend Following, Momentum, Breakout, Mean Reversion. Full auto, semi-auto, or manual approval." },
-  { icon: "⚠", title: "Risk Engine", desc: "Hard limits on per-trade risk, daily/weekly/monthly loss, and account exposure. Breaches auto-pause the engine." },
-  { icon: "◉", title: "Portfolio Analytics", desc: "Sharpe ratio, Sortino ratio, max drawdown, equity curve, monthly returns, asset allocation — all computed from your trade history." },
+  { icon:"📡", title:"Live Signals", desc:"Real top traders from Binance & Bybit leaderboards. See their exact positions, leverage, and ROE in real time." },
+  { icon:"🤖", title:"Auto Alerts", desc:"Telegram notifications the moment a top trader opens a new position. Never miss a signal." },
+  { icon:"🧮", title:"Risk Calculator", desc:"Enter your balance and risk %, get exact position size and margin required before you trade." },
+  { icon:"⚠", title:"Risk Engine", desc:"Hard limits on daily, weekly, and monthly losses. Engine pauses automatically on breach." },
+  { icon:"◉", title:"AI Strategies", desc:"4 built-in strategies: Trend Following, Momentum, Breakout, Mean Reversion." },
+  { icon:"◈", title:"Portfolio Analytics", desc:"Sharpe ratio, Sortino ratio, drawdown, equity curve — all from your actual trade history." },
 ];
 
-const STATS = [
-  { label: "Avg 30d ROI", value: "+18.4%" },
-  { label: "Traders Available", value: "12" },
-  { label: "Risk Checks/Trade", value: "7" },
-];
-
-const PRICING = [
-  { name: "Free", price: "$0", features: ["1 exchange connection", "Copy up to 3 traders", "Manual AI signals", "Basic portfolio stats"], cta: "Get started", href: "/register" },
-  { name: "Pro", price: "$29/mo", features: ["3 exchange connections", "Unlimited copy traders", "Semi-auto AI signals", "Full analytics", "Email + Telegram alerts"], cta: "Start free trial", href: "/register", highlight: true },
-  { name: "Elite", price: "$79/mo", features: ["Unlimited connections", "Priority signal feed", "Full-auto AI execution", "Advanced risk controls", "Discord + all channels"], cta: "Contact us", href: "/register" },
-];
-
-const FAQ = [
-  { q: "Is my exchange API key safe?", a: "Keys are encrypted with AES-256-GCM before storage. Trade execution is signed in your browser — your secrets never pass through our servers." },
-  { q: "Does it trade when my browser is closed?", a: "No. The copy engine runs in your browser tab. This is by design: it avoids paid server infrastructure and keeps you in control. Open the dashboard to run the engine." },
-  { q: "Which exchanges are supported?", a: "Binance USDT-M Futures and Bybit V5 Unified. More exchanges can be added as the ExchangeClient interface is standardised." },
-  { q: "What happens when a risk limit is breached?", a: "The engine pauses immediately, logs the breach, sends notifications, and requires you to manually resume from the Risk Settings page." },
+const STEPS = [
+  { n:"01", title:"Create account", desc:"Sign up in seconds. No exchange connection required to start." },
+  { n:"02", title:"Browse signals", desc:"See real top traders and their live positions from Binance & Bybit leaderboards." },
+  { n:"03", title:"Set up alerts", desc:"Add your Telegram bot. Get notified the moment a trader opens a position." },
+  { n:"04", title:"Execute manually", desc:"Use the risk calculator to size your trade, then place it on Bybit yourself." },
 ];
 
 export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div style={{ minHeight:"100vh", background:"var(--bg)", color:"var(--text)" }}>
       {/* Nav */}
-      <nav className="border-b border-zinc-800 px-6 py-4 flex items-center justify-between sticky top-0 bg-black/80 backdrop-blur z-10">
-        <span className="font-bold tracking-widest uppercase text-sm">Copy<span className="text-blue-500">Trade</span> Engine</span>
-        <div className="flex items-center gap-4">
-          <Link href="/login" className="text-zinc-400 hover:text-white text-sm transition-colors">Sign in</Link>
-          <Link href="/register" className="bg-blue-600 hover:bg-blue-500 text-white px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">Get started</Link>
+      <nav style={{ borderBottom:"1px solid var(--border)", padding:"0 40px", height:60, display:"flex", alignItems:"center", justifyContent:"space-between", position:"sticky", top:0, background:"rgba(10,10,15,0.85)", backdropFilter:"blur(12px)", zIndex:20 }}>
+        <div>
+          <span style={{ fontWeight:800, fontSize:16 }}>Copy</span>
+          <span style={{ fontWeight:800, fontSize:16, color:"var(--accent-light)" }}>Trade</span>
+        </div>
+        <div style={{ display:"flex", gap:12 }}>
+          <Link href="/login" style={{ color:"var(--text-muted)", fontSize:13, textDecoration:"none", padding:"7px 14px", borderRadius:8, transition:"color 0.15s" }}>Sign in</Link>
+          <Link href="/register" className="btn btn-primary" style={{ textDecoration:"none", fontSize:13, padding:"7px 16px" }}>Get started free</Link>
         </div>
       </nav>
 
       {/* Hero */}
-      <section className="px-6 py-24 max-w-5xl mx-auto text-center">
-        <div className="inline-flex items-center gap-2 bg-blue-600/10 border border-blue-600/20 rounded-full px-4 py-1.5 text-blue-400 text-sm mb-8">
-          <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse" />
-          Personal crypto copy trading platform
+      <section style={{ padding:"100px 40px 80px", textAlign:"center", maxWidth:800, margin:"0 auto" }}>
+        <div style={{ display:"inline-flex", alignItems:"center", gap:8, background:"rgba(99,102,241,0.1)", border:"1px solid rgba(99,102,241,0.2)", borderRadius:999, padding:"6px 16px", marginBottom:28, fontSize:12, color:"var(--accent-light)" }}>
+          <span style={{ width:6, height:6, borderRadius:"50%", background:"var(--accent-light)", animation:"pulse 2s infinite", display:"inline-block" }} />
+          Live data from Binance & Bybit leaderboards
         </div>
-        <h1 className="text-5xl md:text-6xl font-bold tracking-tight leading-tight">
-          Copy professional traders.<br />
-          <span className="text-blue-500">Risk-first.</span>
+        <h1 style={{ fontSize:56, fontWeight:800, lineHeight:1.1, marginBottom:20, letterSpacing:"-0.02em" }}>
+          Copy top traders.<br />
+          <span style={{ background:"linear-gradient(135deg,var(--accent-light),var(--purple))", WebkitBackgroundClip:"text", WebkitTextFillColor:"transparent" }}>Stay in control.</span>
         </h1>
-        <p className="text-zinc-400 text-lg mt-6 max-w-2xl mx-auto">
-          Mirror top Binance and Bybit traders with automatic position sizing, 7-layer risk protection, and AI-assisted strategies — all executed from your browser.
+        <p style={{ color:"var(--text-muted)", fontSize:18, lineHeight:1.7, marginBottom:40, maxWidth:560, margin:"0 auto 40px" }}>
+          See what the best Binance and Bybit futures traders are doing right now. Get Telegram alerts instantly. Calculate your position size. Execute manually with confidence.
         </p>
-        <div className="flex gap-4 justify-center mt-8">
-          <Link href="/register" className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-3 rounded-xl text-base font-medium transition-colors">
-            Start for free
-          </Link>
-          <Link href="/login" className="border border-zinc-700 hover:bg-zinc-900 text-white px-6 py-3 rounded-xl text-base transition-colors">
-            Sign in
-          </Link>
-        </div>
-
-        {/* Stat strip */}
-        <div className="mt-16 grid grid-cols-3 gap-4 max-w-lg mx-auto">
-          {STATS.map(s => (
-            <div key={s.label} className="bg-zinc-900 border border-zinc-800 rounded-xl py-4 px-3">
-              <p className="text-blue-400 text-2xl font-bold">{s.value}</p>
-              <p className="text-zinc-500 text-xs mt-1">{s.label}</p>
-            </div>
-          ))}
+        <div style={{ display:"flex", gap:12, justifyContent:"center", flexWrap:"wrap" }}>
+          <Link href="/register" className="btn btn-primary" style={{ textDecoration:"none", fontSize:15, padding:"13px 28px" }}>Start for free</Link>
+          <Link href="/login" className="btn btn-ghost" style={{ textDecoration:"none", fontSize:15, padding:"13px 24px" }}>Sign in</Link>
         </div>
 
         {/* Mock terminal */}
-        <div className="mt-16 bg-zinc-950 border border-zinc-800 rounded-2xl p-6 text-left max-w-2xl mx-auto font-mono text-sm">
-          <div className="flex gap-1.5 mb-4">
-            <span className="w-3 h-3 rounded-full bg-red-500/60" />
-            <span className="w-3 h-3 rounded-full bg-yellow-500/60" />
-            <span className="w-3 h-3 rounded-full bg-green-500/60" />
+        <div style={{ marginTop:64, background:"var(--bg-card)", border:"1px solid var(--border)", borderRadius:16, padding:24, textAlign:"left", fontFamily:"monospace", fontSize:12 }}>
+          <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+            {["#ff5f57","#ffbd2e","#28c840"].map(c=><span key={c} style={{ width:10, height:10, borderRadius:"50%", background:c }} />)}
           </div>
-          <div className="space-y-1.5 text-xs">
-            <p><span className="text-zinc-600">00:01</span> <span className="text-profit">ENGINE_STARTED</span> <span className="text-zinc-400">polling every 5s</span></p>
-            <p><span className="text-zinc-600">00:06</span> <span className="text-blue-400">SIGNAL_DETECTED</span> <span className="text-zinc-300">AlphaWave → BTCUSDT LONG</span></p>
-            <p><span className="text-zinc-600">00:06</span> <span className="text-zinc-500">RISK_CHECK</span> <span className="text-zinc-400">7/7 passed · notional $340 · risk 0.8%</span></p>
-            <p><span className="text-zinc-600">00:06</span> <span className="text-profit">TRADE_EXECUTED</span> <span className="text-zinc-300">BTCUSDT LONG 0.005 @ $67,412</span></p>
-            <p><span className="text-zinc-600">00:06</span> <span className="text-zinc-500">SL_ATTACHED</span> <span className="text-zinc-400">$65,000 · TP $72,000</span></p>
-            <p><span className="text-zinc-600">04:22</span> <span className="text-profit">POSITION_CLOSED</span> <span className="text-zinc-300">BTCUSDT +$23.40 (6.9%)</span></p>
-          </div>
+          {[
+            ["var(--profit)","AUTO-ALERT","AlphaWave opened BTCUSDT LONG · $67,412 · 3x · +4.2% ROE"],
+            ["var(--accent-light)","SIGNAL","StellarMomentum → SOLUSDT LONG · Entry $172 · Lev 3x"],
+            ["var(--text-faint)","CALC","Size: 0.0041 BTC · Margin: $91.80 · Risk: 1%"],
+            ["var(--profit)","TELEGRAM","Alert sent to @CopyTradeV1_bot ✓"],
+            ["var(--yellow)","SIGNAL","TideRider → BTCUSDT LONG · Entry $66,900 · Lev 1x"],
+          ].map(([c,tag,msg],i)=>(
+            <div key={i} style={{ display:"flex", gap:12, marginBottom:6 }}>
+              <span style={{ color:"var(--text-faint)", minWidth:50 }}>{String(i).padStart(2,"0")}:{String(i*7+3).padStart(2,"0")}</span>
+              <span style={{ color:c as string, minWidth:90, fontWeight:600 }}>{tag}</span>
+              <span style={{ color:"var(--text-muted)" }}>{msg}</span>
+            </div>
+          ))}
         </div>
       </section>
 
       {/* Features */}
-      <section className="px-6 py-20 border-t border-zinc-800">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">Everything you need</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {FEATURES.map(f => (
-              <div key={f.title} className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-6 transition-colors">
-                <div className="text-2xl mb-3">{f.icon}</div>
-                <h3 className="text-white font-semibold text-lg">{f.title}</h3>
-                <p className="text-zinc-400 text-sm mt-2 leading-relaxed">{f.desc}</p>
+      <section style={{ padding:"80px 40px", borderTop:"1px solid var(--border)" }}>
+        <div style={{ maxWidth:1100, margin:"0 auto" }}>
+          <h2 style={{ textAlign:"center", fontSize:36, fontWeight:800, marginBottom:12, letterSpacing:"-0.02em" }}>Everything you need</h2>
+          <p style={{ textAlign:"center", color:"var(--text-muted)", marginBottom:52, fontSize:16 }}>Built for serious traders who want data without the noise.</p>
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill,minmax(300px,1fr))", gap:16 }}>
+            {FEATURES.map(f=>(
+              <div key={f.title} className="card card-interactive" style={{ padding:24 }}>
+                <div style={{ fontSize:28, marginBottom:14 }}>{f.icon}</div>
+                <p style={{ color:"var(--text)", fontWeight:600, fontSize:15, marginBottom:8 }}>{f.title}</p>
+                <p style={{ color:"var(--text-muted)", fontSize:13, lineHeight:1.6 }}>{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* Pricing */}
-      <section className="px-6 py-20 border-t border-zinc-800">
-        <div className="max-w-4xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-3">Pricing</h2>
-          <p className="text-zinc-500 text-center mb-12">Start free, upgrade when you're ready.</p>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {PRICING.map(p => (
-              <div key={p.name} className={`rounded-xl p-6 flex flex-col gap-4 border ${p.highlight ? "bg-blue-600/10 border-blue-600/40" : "bg-zinc-900 border-zinc-800"}`}>
-                <div>
-                  <p className="text-zinc-400 text-sm">{p.name}</p>
-                  <p className="text-white text-3xl font-bold mt-1">{p.price}</p>
+      {/* How it works */}
+      <section style={{ padding:"80px 40px", borderTop:"1px solid var(--border)", background:"var(--bg-card)" }}>
+        <div style={{ maxWidth:800, margin:"0 auto" }}>
+          <h2 style={{ textAlign:"center", fontSize:36, fontWeight:800, marginBottom:52, letterSpacing:"-0.02em" }}>How it works</h2>
+          <div style={{ display:"flex", flexDirection:"column", gap:0 }}>
+            {STEPS.map((s,i)=>(
+              <div key={s.n} style={{ display:"flex", gap:24, paddingBottom:i<STEPS.length-1?40:0 }}>
+                <div style={{ display:"flex", flexDirection:"column", alignItems:"center", flexShrink:0 }}>
+                  <div style={{ width:44, height:44, borderRadius:12, background:"var(--accent-glow)", border:"1px solid rgba(99,102,241,0.3)", display:"flex", alignItems:"center", justifyContent:"center", color:"var(--accent-light)", fontWeight:800, fontSize:13 }}>{s.n}</div>
+                  {i<STEPS.length-1&&<div style={{ width:1, flex:1, background:"var(--border)", margin:"8px 0" }} />}
                 </div>
-                <ul className="space-y-2 flex-1">
-                  {p.features.map(f => (
-                    <li key={f} className="flex items-start gap-2 text-sm text-zinc-300">
-                      <span className="text-profit mt-0.5">✓</span> {f}
-                    </li>
-                  ))}
-                </ul>
-                <Link href={p.href}
-                  className={`block text-center py-2.5 rounded-lg text-sm font-medium transition-colors ${p.highlight ? "bg-blue-600 hover:bg-blue-500 text-white" : "border border-zinc-700 hover:bg-zinc-800 text-white"}`}>
-                  {p.cta}
-                </Link>
+                <div style={{ paddingTop:10, paddingBottom:i<STEPS.length-1?0:0 }}>
+                  <p style={{ color:"var(--text)", fontWeight:600, fontSize:15, marginBottom:6 }}>{s.title}</p>
+                  <p style={{ color:"var(--text-muted)", fontSize:13, lineHeight:1.6 }}>{s.desc}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* FAQ */}
-      <section className="px-6 py-20 border-t border-zinc-800">
-        <div className="max-w-2xl mx-auto">
-          <h2 className="text-3xl font-bold text-center mb-12">FAQ</h2>
-          <div className="space-y-4">
-            {FAQ.map(f => (
-              <div key={f.q} className="bg-zinc-900 border border-zinc-800 rounded-xl p-5">
-                <p className="text-white font-medium">{f.q}</p>
-                <p className="text-zinc-400 text-sm mt-2 leading-relaxed">{f.a}</p>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* CTA */}
+      <section style={{ padding:"80px 40px", borderTop:"1px solid var(--border)", textAlign:"center" }}>
+        <h2 style={{ fontSize:40, fontWeight:800, marginBottom:16, letterSpacing:"-0.02em" }}>Ready to start?</h2>
+        <p style={{ color:"var(--text-muted)", fontSize:16, marginBottom:36 }}>Free to use. No exchange connection required.</p>
+        <Link href="/register" className="btn btn-primary" style={{ textDecoration:"none", fontSize:15, padding:"14px 32px" }}>Create free account</Link>
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-zinc-800 px-6 py-8 text-center">
-        <p className="text-zinc-600 text-sm">CopyTrade Engine — personal use only. Not financial advice. Trade at your own risk.</p>
-        <div className="flex justify-center gap-6 mt-4 text-zinc-600 text-sm">
-          <Link href="/login" className="hover:text-zinc-400">Sign in</Link>
-          <Link href="/register" className="hover:text-zinc-400">Register</Link>
-          <Link href="/dashboard" className="hover:text-zinc-400">Dashboard</Link>
+      <footer style={{ borderTop:"1px solid var(--border)", padding:"24px 40px", display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:"wrap", gap:12 }}>
+        <div><span style={{ fontWeight:700, fontSize:13 }}>Copy</span><span style={{ fontWeight:700, fontSize:13, color:"var(--accent-light)" }}>Trade</span></div>
+        <p style={{ color:"var(--text-faint)", fontSize:12 }}>Not financial advice. Trade at your own risk.</p>
+        <div style={{ display:"flex", gap:16 }}>
+          {[["Sign in","/login"],["Register","/register"],["Dashboard","/dashboard"]].map(([l,h])=>(
+            <Link key={h} href={h} style={{ color:"var(--text-faint)", fontSize:12, textDecoration:"none" }}>{l}</Link>
+          ))}
         </div>
       </footer>
     </div>

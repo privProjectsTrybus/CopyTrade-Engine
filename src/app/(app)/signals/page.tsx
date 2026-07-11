@@ -1,109 +1,89 @@
 "use client";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { Spinner, Badge } from "@/components/ui";
+import { Spinner, Badge } from "@/components/ui/Badge";
 import type { RealTrader, RealPosition } from "@/app/api/real-traders/route";
 
-// ── Sound alert (Web Audio API, no external files) ───────────────────────────
 function playAlert() {
   try {
     const ctx = new AudioContext();
-    [0, 0.15, 0.3].forEach((delay, i) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.connect(gain); gain.connect(ctx.destination);
-      osc.frequency.value = 880 + i * 110;
-      osc.type = "sine";
-      gain.gain.setValueAtTime(0.3, ctx.currentTime + delay);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
-      osc.start(ctx.currentTime + delay);
-      osc.stop(ctx.currentTime + delay + 0.3);
+    [0,0.15,0.3].forEach((d,i)=>{
+      const o=ctx.createOscillator(), g=ctx.createGain();
+      o.connect(g); g.connect(ctx.destination);
+      o.frequency.value=880+i*110; o.type="sine";
+      g.gain.setValueAtTime(0.3,ctx.currentTime+d);
+      g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+d+0.3);
+      o.start(ctx.currentTime+d); o.stop(ctx.currentTime+d+0.3);
     });
   } catch {}
 }
 
-// ── Risk Calculator modal ────────────────────────────────────────────────────
-function RiskCalc({ position, trader, onClose }: { position: RealPosition; trader: RealTrader; onClose: () => void }) {
-  const [balance, setBalance] = useState(1000);
-  const [riskPct, setRiskPct] = useState(1);
-  const [slPct, setSlPct] = useState(2);
+function RiskCalc({ pos, trader, onClose }: { pos:RealPosition; trader:RealTrader; onClose:()=>void }) {
+  const [bal, setBal] = useState(1000);
+  const [risk, setRisk] = useState(1);
+  const [sl, setSl] = useState(2);
   const [copied, setCopied] = useState(false);
 
-  const riskAmount = (balance * riskPct) / 100;
-  const slDistance = position.entryPrice * (slPct / 100);
-  const positionSize = slDistance > 0 ? riskAmount / slDistance : 0;
-  const notional = positionSize * position.entryPrice;
-  const margin = position.leverage > 0 ? notional / position.leverage : notional;
+  const riskAmt = bal*risk/100;
+  const slDist = pos.entryPrice*sl/100;
+  const size = slDist>0?riskAmt/slDist:0;
+  const notional = size*pos.entryPrice;
+  const margin = pos.leverage>0?notional/pos.leverage:notional;
+  const slPrice = pos.side==="LONG"?pos.entryPrice-slDist:pos.entryPrice+slDist;
 
-  function copyDetails() {
-    const txt = [
-      `${position.symbol} ${position.side} — ${trader.nickname} (${trader.source})`,
-      `Entry: $${position.entryPrice.toLocaleString()}`,
-      `Size: ${positionSize.toFixed(4)} ${position.symbol.replace("USDT", "")}`,
+  function copy() {
+    navigator.clipboard.writeText([
+      `${pos.symbol} ${pos.side} — ${trader.nickname}`,
+      `Entry: $${pos.entryPrice.toLocaleString()}`,
+      `Size: ${size.toFixed(4)} ${pos.symbol.replace("USDT","")}`,
       `Notional: $${notional.toFixed(2)}`,
-      `Margin needed: $${margin.toFixed(2)}`,
-      `Leverage: ${position.leverage}x`,
-      `Stop Loss: $${(position.side === "LONG" ? position.entryPrice - slDistance : position.entryPrice + slDistance).toFixed(2)} (${slPct}%)`,
-      `Current ROE: ${position.roe >= 0 ? "+" : ""}${position.roe.toFixed(2)}%`,
-    ].join("\n");
-    navigator.clipboard.writeText(txt);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+      `Margin: $${margin.toFixed(2)}`,
+      `Leverage: ${pos.leverage}x`,
+      `Stop Loss: $${slPrice.toFixed(2)} (${sl}%)`,
+      `ROE: ${pos.roe>=0?"+":""}${pos.roe.toFixed(2)}%`,
+    ].join("\n"));
+    setCopied(true); setTimeout(()=>setCopied(false),2000);
   }
 
-  const inp: React.CSSProperties = { background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: 8, padding: "8px 12px", color: "var(--text)", fontSize: 13, width: "100%", boxSizing: "border-box", marginTop: 4 };
-
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, width: "100%", maxWidth: 440, padding: 24 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(6px)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div className="card animate-fade" style={{width:"100%",maxWidth:420,padding:24}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:20}}>
           <div>
-            <h2 style={{ color: "var(--text)", fontSize: 16, fontWeight: 600, margin: 0 }}>Position Calculator</h2>
-            <p style={{ color: "var(--text-muted)", fontSize: 12, margin: "4px 0 0" }}>
-              {position.symbol} · <span style={{ color: position.side === "LONG" ? "var(--profit)" : "var(--loss)" }}>{position.side}</span> · {position.leverage}x · {trader.nickname}
+            <h2 style={{color:"var(--text)",fontSize:16,fontWeight:700}}>Risk Calculator</h2>
+            <p style={{color:"var(--text-muted)",fontSize:12,marginTop:3}}>
+              {pos.symbol} · <span style={{color:pos.side==="LONG"?"var(--profit)":"var(--loss)"}}>{pos.side}</span> · {pos.leverage}x · {trader.nickname}
             </p>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 20, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"var(--text-faint)",fontSize:22,cursor:"pointer",lineHeight:1}}>✕</button>
         </div>
 
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-            <div>
-              <label style={{ color: "var(--text-muted)", fontSize: 12 }}>Account Balance (USDT)</label>
-              <input type="number" value={balance} onChange={e => setBalance(+e.target.value)} style={inp} />
-            </div>
-            <div>
-              <label style={{ color: "var(--text-muted)", fontSize: 12 }}>Risk per Trade (%)</label>
-              <input type="number" min={0.1} max={10} step={0.1} value={riskPct} onChange={e => setRiskPct(+e.target.value)} style={inp} />
-            </div>
-          </div>
-          <div>
-            <label style={{ color: "var(--text-muted)", fontSize: 12 }}>Stop Loss Distance (%)</label>
-            <input type="number" min={0.1} max={20} step={0.1} value={slPct} onChange={e => setSlPct(+e.target.value)} style={inp} />
+        <div style={{display:"flex",flexDirection:"column",gap:12}}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10}}>
+            <div><label style={{color:"var(--text-muted)",fontSize:11,fontWeight:500}}>Balance (USDT)</label><input type="number" value={bal} onChange={e=>setBal(+e.target.value)} className="input" style={{marginTop:4}} /></div>
+            <div><label style={{color:"var(--text-muted)",fontSize:11,fontWeight:500}}>Risk %</label><input type="number" min={0.1} max={10} step={0.1} value={risk} onChange={e=>setRisk(+e.target.value)} className="input" style={{marginTop:4}} /></div>
+            <div><label style={{color:"var(--text-muted)",fontSize:11,fontWeight:500}}>Stop Loss %</label><input type="number" min={0.1} max={20} step={0.1} value={sl} onChange={e=>setSl(+e.target.value)} className="input" style={{marginTop:4}} /></div>
           </div>
 
-          <div style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 10, padding: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <div style={{background:"var(--bg)",border:"1px solid var(--border)",borderRadius:12,padding:16,display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
             {[
-              { l: "Entry Price", v: `$${position.entryPrice.toLocaleString()}`, big: false },
-              { l: "Current ROE", v: `${position.roe >= 0 ? "+" : ""}${position.roe.toFixed(2)}%`, big: false, color: position.roe >= 0 ? "var(--profit)" : "var(--loss)" },
-              { l: "Risk Amount", v: `$${riskAmount.toFixed(2)}`, big: false },
-              { l: "Stop Loss", v: `$${(position.side === "LONG" ? position.entryPrice - slDistance : position.entryPrice + slDistance).toFixed(2)}`, big: false },
-              { l: "Position Size", v: `${positionSize.toFixed(4)} ${position.symbol.replace("USDT", "")}`, big: true },
-              { l: "Required Margin", v: `$${margin.toFixed(2)}`, big: true },
-            ].map(r => (
-              <div key={r.l} style={{ padding: "8px 10px", background: r.big ? "rgba(59,130,246,0.08)" : "transparent", borderRadius: 6, border: r.big ? "1px solid rgba(59,130,246,0.2)" : "none" }}>
-                <p style={{ color: "var(--text-faint)", fontSize: 10, textTransform: "uppercase", margin: 0 }}>{r.l}</p>
-                <p style={{ color: (r as any).color ?? (r.big ? "var(--accent)" : "var(--text)"), fontSize: r.big ? 16 : 13, fontWeight: r.big ? 700 : 400, margin: "3px 0 0" }}>{r.v}</p>
+              {l:"Entry Price",v:`$${pos.entryPrice.toLocaleString()}`,hi:false},
+              {l:"Stop Loss",v:`$${slPrice.toFixed(2)}`,hi:false,c:"var(--loss)"},
+              {l:"Risk Amount",v:`$${riskAmt.toFixed(2)}`,hi:false},
+              {l:"Current ROE",v:`${pos.roe>=0?"+":""}${pos.roe.toFixed(2)}%`,hi:false,c:pos.roe>=0?"var(--profit)":"var(--loss)"},
+              {l:"Position Size",v:`${size.toFixed(4)} ${pos.symbol.replace("USDT","")}`,hi:true},
+              {l:"Required Margin",v:`$${margin.toFixed(2)}`,hi:true},
+            ].map(r=>(
+              <div key={r.l} style={{padding:"10px 12px",background:r.hi?"var(--accent-glow)":"transparent",borderRadius:9,border:r.hi?"1px solid rgba(99,102,241,0.2)":"none"}}>
+                <p style={{color:"var(--text-faint)",fontSize:10,textTransform:"uppercase",letterSpacing:"0.05em"}}>{r.l}</p>
+                <p style={{color:(r as any).c??(r.hi?"var(--accent-light)":"var(--text)"),fontSize:r.hi?17:13,fontWeight:r.hi?700:400,marginTop:4}}>{r.v}</p>
               </div>
             ))}
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-            <button onClick={copyDetails}
-              style={{ padding: "10px", borderRadius: 8, border: "1px solid var(--border)", background: copied ? "rgba(22,199,132,0.1)" : "transparent", color: copied ? "var(--profit)" : "var(--text)", fontSize: 13, cursor: "pointer" }}>
-              {copied ? "✓ Copied!" : "📋 Copy Details"}
-            </button>
-            <a href={`https://www.bybit.com/trade/usdt/${position.symbol}`} target="_blank"
-              style={{ padding: "10px", borderRadius: 8, border: "none", background: "var(--accent)", color: "#fff", fontSize: 13, fontWeight: 500, textAlign: "center", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+            <button onClick={copy} className={`btn ${copied?"btn-success":"btn-ghost"}`}>{copied?"✓ Copied!":"📋 Copy Details"}</button>
+            <a href={`https://www.bybit.com/trade/usdt/${pos.symbol}`} target="_blank"
+              className="btn btn-primary" style={{textDecoration:"none",display:"flex",alignItems:"center",justifyContent:"center"}}>
               Open on Bybit →
             </a>
           </div>
@@ -113,131 +93,100 @@ function RiskCalc({ position, trader, onClose }: { position: RealPosition; trade
   );
 }
 
-// ── Signal History panel ──────────────────────────────────────────────────────
-function HistoryPanel({ onClose }: { onClose: () => void }) {
-  const [history, setHistory] = useState<any[]>([]);
+function HistoryPanel({ onClose }: { onClose:()=>void }) {
+  const [hist, setHist] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch("/api/signals/history").then(r => r.ok ? r.json() : []).then(d => { setHistory(d); setLoading(false); });
-  }, []);
-
+  useEffect(()=>{ fetch("/api/signals/history").then(r=>r.ok?r.json():[]).then(d=>{setHist(d);setLoading(false);}); },[]);
   return (
-    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.75)", backdropFilter: "blur(4px)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div style={{ background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 16, width: "100%", maxWidth: 600, maxHeight: "80vh", display: "flex", flexDirection: "column" }}>
-        <div style={{ padding: "20px 24px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h2 style={{ color: "var(--text)", fontSize: 16, fontWeight: 600, margin: 0 }}>Signal History</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-faint)", fontSize: 20, cursor: "pointer" }}>✕</button>
+    <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.8)",backdropFilter:"blur(6px)",zIndex:50,display:"flex",alignItems:"center",justifyContent:"center",padding:16}}>
+      <div className="card animate-fade" style={{width:"100%",maxWidth:640,maxHeight:"80vh",display:"flex",flexDirection:"column"}}>
+        <div style={{padding:"18px 24px",borderBottom:"1px solid var(--border)",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+          <h2 style={{color:"var(--text)",fontSize:15,fontWeight:600}}>Signal History</h2>
+          <button onClick={onClose} style={{background:"none",border:"none",color:"var(--text-faint)",fontSize:20,cursor:"pointer"}}>✕</button>
         </div>
-        <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
-          {loading ? <Spinner /> : history.length === 0 ? (
-            <p style={{ color: "var(--text-faint)", textAlign: "center", padding: 40 }}>No signals logged yet. They appear here when you view positions.</p>
-          ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-              {history.map((h, i) => (
-                <div key={i} style={{ background: "var(--bg)", border: "1px solid var(--border)", borderRadius: 8, padding: "10px 14px", display: "grid", gridTemplateColumns: "1fr 80px 80px 80px 120px", gap: 8, alignItems: "center" }}>
-                  <div>
-                    <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 13 }}>{h.symbol}</span>
-                    <span style={{ color: "var(--text-faint)", fontSize: 11, marginLeft: 8 }}>{h.traderNickname}</span>
-                  </div>
-                  <Badge variant={h.side === "LONG" ? "green" : "red"}>{h.side}</Badge>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>${h.entryPrice?.toLocaleString()}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{h.leverage}x</span>
-                  <span style={{ color: "var(--text-faint)", fontSize: 11 }}>{new Date(h.createdAt).toLocaleString()}</span>
-                </div>
-              ))}
+        <div style={{flex:1,overflowY:"auto",padding:16}}>
+          {loading ? <div style={{display:"flex",justifyContent:"center",padding:40}}><Spinner/></div>
+          : hist.length===0 ? <p style={{color:"var(--text-faint)",textAlign:"center",padding:40}}>No signals logged yet.</p>
+          : hist.map((h,i)=>(
+            <div key={i} className="table-row" style={{display:"grid",gridTemplateColumns:"1fr 70px 90px 60px 130px",alignItems:"center",gap:8}}>
+              <div><span style={{color:"var(--text)",fontWeight:600,fontSize:13}}>{h.symbol}</span><span style={{color:"var(--text-faint)",fontSize:11,marginLeft:8}}>{h.traderNickname}</span></div>
+              <Badge variant={h.side==="LONG"?"green":"red"}>{h.side}</Badge>
+              <span style={{color:"var(--text-muted)",fontSize:12}}>${h.entryPrice?.toLocaleString()}</span>
+              <span style={{color:"var(--text-muted)",fontSize:12}}>{h.leverage}x</span>
+              <span style={{color:"var(--text-faint)",fontSize:11}}>{new Date(h.createdAt).toLocaleString()}</span>
             </div>
-          )}
+          ))}
         </div>
       </div>
     </div>
   );
 }
 
-// ── Trader Card ───────────────────────────────────────────────────────────────
-function TraderCard({ trader, onSelect, isNew }: { trader: RealTrader; onSelect: (p: RealPosition) => void; isNew: boolean }) {
-  const [expanded, setExpanded] = useState(false);
+function TraderCard({ trader, isNew, onSelect }: { trader:RealTrader; isNew:boolean; onSelect:(p:RealPosition)=>void }) {
+  const [open, setOpen] = useState(false);
 
-  async function logAndSelect(pos: RealPosition) {
-    fetch("/api/signals/history", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trader, position: pos }) }).catch(() => {});
-    onSelect(pos);
+  async function alert(pos:RealPosition) {
+    fetch("/api/signals/history",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({trader,position:pos})}).catch(()=>{});
+    const r = await fetch("/api/signals/notify",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({trader,position:pos})});
+    const d = await r.json();
+    if(!r.ok) window.alert(d.error??"Telegram not configured");
+    else window.alert("✓ Sent to Telegram");
   }
 
-  async function sendTelegram(pos: RealPosition) {
-    const res = await fetch("/api/signals/notify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ trader, position: pos }) });
-    if (!res.ok) alert("Telegram not configured. Go to Alerts → set up Telegram first.");
-    else alert("Sent to Telegram ✓");
-  }
-
-  const sourceBg = trader.source === "BINANCE" ? "rgba(234,179,8,0.85)" : trader.source === "BYBIT_COPY" ? "rgba(22,199,132,0.85)" : "rgba(249,115,22,0.85)";
-  const sourceLabel = trader.source === "BYBIT_COPY" ? "BYBIT COPY" : trader.source;
+  const srcColor = trader.source==="BINANCE"?"#f59e0b":trader.source==="BYBIT_COPY"?"var(--profit)":"#fb923c";
+  const srcLabel = trader.source==="BYBIT_COPY"?"COPY":trader.source;
 
   return (
-    <div style={{ background: "var(--bg-card)", border: `1px solid ${isNew ? "rgba(22,199,132,0.5)" : "var(--border)"}`, borderRadius: 12, overflow: "hidden", transition: "border-color 0.5s" }}>
-      <div style={{ padding: "14px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", cursor: "pointer" }} onClick={() => setExpanded(e => !e)}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{ width: 40, height: 40, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, fontSize: 15, color: "#fff", background: sourceBg, flexShrink: 0 }}>
+    <div className={`card animate-fade${isNew?" animate-glow":""}`} style={{overflow:"hidden",borderColor:isNew?"rgba(0,212,160,0.4)":"var(--border)",transition:"all 0.4s"}}>
+      <div style={{padding:"14px 18px",display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer"}} onClick={()=>setOpen(o=>!o)}>
+        <div style={{display:"flex",alignItems:"center",gap:12}}>
+          <div style={{width:40,height:40,borderRadius:11,display:"flex",alignItems:"center",justifyContent:"center",fontWeight:700,fontSize:15,color:"#fff",background:srcColor,flexShrink:0}}>
             {trader.nickname[0]?.toUpperCase()}
           </div>
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-              <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 14 }}>{trader.nickname}</span>
-              <Badge variant={trader.source === "BINANCE" ? "yellow" : trader.source === "BYBIT_COPY" ? "green" : "default"}>{sourceLabel}</Badge>
-              {isNew && <Badge variant="green">● New</Badge>}
-              {trader.sharesPositions && <Badge variant="blue">📡 Live Positions</Badge>}
-              {trader.positions.length > 0 && <Badge variant="blue">{trader.positions.length} open</Badge>}
+            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+              <span style={{color:"var(--text)",fontWeight:600,fontSize:14}}>{trader.nickname}</span>
+              <Badge variant={trader.source==="BINANCE"?"yellow":trader.source==="BYBIT_COPY"?"green":"dim"}>{srcLabel}</Badge>
+              {isNew&&<Badge variant="green">● New</Badge>}
+              {trader.positions.length>0&&<Badge variant="blue">📡 {trader.positions.length} live</Badge>}
             </div>
-            <div style={{ display: "flex", gap: 12, marginTop: 3, flexWrap: "wrap" }}>
-              <span style={{ color: trader.roi >= 0 ? "var(--profit)" : "var(--loss)", fontSize: 12, fontWeight: 600 }}>{trader.roi >= 0 ? "+" : ""}{trader.roi.toFixed(1)}% ROI</span>
-              <span style={{ color: "var(--text-faint)", fontSize: 12 }}>PnL: ${trader.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-              {trader.winRate > 0 && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>Win: {trader.winRate.toFixed(0)}%</span>}
-              {trader.followers != null && trader.followers > 0 && <span style={{ color: "var(--text-faint)", fontSize: 12 }}>Followers: {trader.followers.toLocaleString()}</span>}
-              {trader.maxDrawdown != null && <span style={{ color: "var(--loss)", fontSize: 12 }}>DD: -{trader.maxDrawdown.toFixed(1)}%</span>}
+            <div style={{display:"flex",gap:10,marginTop:3,flexWrap:"wrap"}}>
+              <span style={{color:trader.roi>=0?"var(--profit)":"var(--loss)",fontSize:12,fontWeight:600}}>{trader.roi>=0?"+":""}{trader.roi.toFixed(1)}% ROI</span>
+              <span style={{color:"var(--text-faint)",fontSize:12}}>PnL ${trader.pnl.toLocaleString(undefined,{maximumFractionDigits:0})}</span>
+              {trader.winRate>0&&<span style={{color:"var(--text-faint)",fontSize:12}}>Win {trader.winRate.toFixed(0)}%</span>}
+              {trader.maxDrawdown!=null&&<span style={{color:"var(--loss)",fontSize:12}}>DD -{trader.maxDrawdown.toFixed(1)}%</span>}
             </div>
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <a href={trader.profileUrl} target="_blank" onClick={e => e.stopPropagation()} style={{ color: "var(--accent)", fontSize: 12, textDecoration: "none", whiteSpace: "nowrap" }}>
-            Profile →
-          </a>
-          <span style={{ color: "var(--text-faint)" }}>{expanded ? "▲" : "▼"}</span>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <a href={trader.profileUrl} target="_blank" onClick={e=>e.stopPropagation()} style={{color:"var(--accent-light)",fontSize:12,textDecoration:"none"}}>Profile →</a>
+          <span style={{color:"var(--text-faint)",fontSize:12}}>{open?"▲":"▼"}</span>
         </div>
       </div>
 
-      {expanded && (
-        <div style={{ borderTop: "1px solid var(--border)" }}>
-          {trader.positions.length === 0 ? (
-            <div style={{ padding: "16px", textAlign: "center" }}>
-              <p style={{ color: "var(--text-faint)", fontSize: 13, margin: 0 }}>
-                {trader.sharesPositions ? "No open positions." : "Positions not public. View their profile directly."}
-              </p>
-              <a href={trader.profileUrl} target="_blank" style={{ color: "var(--accent)", fontSize: 12, display: "inline-block", marginTop: 6 }}>View on {sourceLabel} →</a>
+      {open && (
+        <div className="animate-fade" style={{borderTop:"1px solid var(--border)"}}>
+          {trader.positions.length===0 ? (
+            <div style={{padding:20,textAlign:"center"}}>
+              <p style={{color:"var(--text-faint)",fontSize:13}}>{trader.sharesPositions?"No open positions.":"Positions not public."}</p>
+              <a href={trader.profileUrl} target="_blank" style={{color:"var(--accent-light)",fontSize:12,display:"inline-block",marginTop:6}}>View on {srcLabel} →</a>
             </div>
           ) : (
             <>
-              {/* Table header */}
-              <div style={{ padding: "8px 16px", display: "grid", gridTemplateColumns: "140px 70px 100px 100px 60px 80px 1fr", gap: 8, borderBottom: "1px solid var(--border)" }}>
-                {["Symbol", "Side", "Entry", "Mark", "Lev", "ROE", "Actions"].map(h => (
-                  <span key={h} style={{ color: "var(--text-faint)", fontSize: 11, fontWeight: 500, textTransform: "uppercase" }}>{h}</span>
-                ))}
+              <div style={{padding:"8px 18px",display:"grid",gridTemplateColumns:"130px 70px 100px 100px 60px 80px 1fr",gap:8,borderBottom:"1px solid var(--border)"}}>
+                {["Symbol","Side","Entry","Mark","Lev","ROE","Actions"].map(h=><span key={h} style={{color:"var(--text-faint)",fontSize:10,fontWeight:500,textTransform:"uppercase",letterSpacing:"0.05em"}}>{h}</span>)}
               </div>
-              {trader.positions.map((pos, i) => (
-                <div key={i} style={{ padding: "10px 16px", display: "grid", gridTemplateColumns: "140px 70px 100px 100px 60px 80px 1fr", gap: 8, alignItems: "center", borderBottom: "1px solid var(--border)" }}>
-                  <span style={{ color: "var(--text)", fontWeight: 600, fontSize: 13 }}>{pos.symbol}</span>
-                  <Badge variant={pos.side === "LONG" ? "green" : "red"}>{pos.side}</Badge>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>${pos.entryPrice.toLocaleString()}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>${pos.markPrice.toLocaleString()}</span>
-                  <span style={{ color: "var(--text-muted)", fontSize: 12 }}>{pos.leverage}x</span>
-                  <span style={{ color: pos.roe >= 0 ? "var(--profit)" : "var(--loss)", fontSize: 12, fontWeight: 600 }}>{pos.roe >= 0 ? "+" : ""}{pos.roe.toFixed(1)}%</span>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    <button onClick={() => logAndSelect(pos)}
-                      style={{ padding: "4px 10px", borderRadius: 6, border: "none", background: "var(--accent)", color: "#fff", fontSize: 11, cursor: "pointer", fontWeight: 500 }}>
-                      Calculate
-                    </button>
-                    <button onClick={() => sendTelegram(pos)}
-                      style={{ padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", fontSize: 11, cursor: "pointer" }}>
-                      📱 Alert
-                    </button>
+              {trader.positions.map((pos,i)=>(
+                <div key={i} className="table-row" style={{padding:"11px 18px",display:"grid",gridTemplateColumns:"130px 70px 100px 100px 60px 80px 1fr",gap:8,alignItems:"center"}}>
+                  <span style={{color:"var(--text)",fontWeight:700,fontSize:13}}>{pos.symbol}</span>
+                  <Badge variant={pos.side==="LONG"?"green":"red"}>{pos.side}</Badge>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>${pos.entryPrice.toLocaleString()}</span>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>${pos.markPrice.toLocaleString()}</span>
+                  <span style={{color:"var(--text-muted)",fontSize:12}}>{pos.leverage}x</span>
+                  <span style={{color:pos.roe>=0?"var(--profit)":"var(--loss)",fontSize:12,fontWeight:600}}>{pos.roe>=0?"+":""}{pos.roe.toFixed(1)}%</span>
+                  <div style={{display:"flex",gap:6}}>
+                    <button onClick={()=>{fetch("/api/signals/history",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({trader,position:pos})}).catch(()=>{}); onSelect(pos);}} className="btn btn-primary" style={{padding:"5px 12px",fontSize:11}}>Calculate</button>
+                    <button onClick={()=>alert(pos)} className="btn btn-ghost" style={{padding:"5px 10px",fontSize:11}}>📱</button>
                   </div>
                 </div>
               ))}
@@ -249,223 +198,121 @@ function TraderCard({ trader, onSelect, isNew }: { trader: RealTrader; onSelect:
   );
 }
 
-// ── Main Page ─────────────────────────────────────────────────────────────────
 export default function SignalsPage() {
   const [traders, setTraders] = useState<RealTrader[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [selected, setSelected] = useState<{ pos: RealPosition; trader: RealTrader } | null>(null);
-  const [showHistory, setShowHistory] = useState(false);
+  const [sel, setSel] = useState<{pos:RealPosition;trader:RealTrader}|null>(null);
+  const [showHist, setShowHist] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
-  const [newUids, setNewUids] = useState<Set<string>>(new Set());
-  const [soundEnabled, setSoundEnabled] = useState(true);
   const [autoAlert, setAutoAlert] = useState(false);
-  const [alertStatus, setAlertStatus] = useState<string>("");
-
-  // Filters
+  const [sound, setSound] = useState(true);
+  const [alertStatus, setAlertStatus] = useState("");
+  const [updated, setUpdated] = useState<Date|null>(null);
+  const [newUids, setNewUids] = useState<Set<string>>(new Set());
   const [minRoi, setMinRoi] = useState(0);
-  const [minWinRate, setMinWinRate] = useState(0);
-  const [maxDrawdown, setMaxDrawdown] = useState(100);
-  const [sourceFilter, setSourceFilter] = useState<"ALL" | "BINANCE" | "BYBIT" | "BYBIT_COPY">("ALL");
-  const [onlyPositions, setOnlyPositions] = useState(false);
+  const [minWr, setMinWr] = useState(0);
+  const [maxDd, setMaxDd] = useState(100);
+  const [src, setSrc] = useState<"ALL"|"BINANCE"|"BYBIT"|"BYBIT_COPY">("ALL");
+  const [posOnly, setPosOnly] = useState(false);
+  const prevRef = useRef<Set<string>>(new Set());
+  const timerRef = useRef<any>(null);
 
-  const prevUidsRef = useRef<Set<string>>(new Set());
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    setError("");
+  const load = useCallback(async (silent=false) => {
+    if(!silent) setLoading(true);
     try {
-      const res = await fetch("/api/real-traders");
-      if (!res.ok) throw new Error("Failed to fetch");
-      const data: RealTrader[] = await res.json();
-
-      // Detect new traders/positions since last fetch
-      const currentUids = new Set(data.map(t => t.uid));
-      const newOnes = new Set([...currentUids].filter(u => prevUidsRef.current.size > 0 && !prevUidsRef.current.has(u)));
-
-      // Detect new positions on existing traders
-      const positionUids = new Set(data.filter(t => t.positions.length > 0).map(t => t.uid));
-      const prevPositionUids = new Set([...prevUidsRef.current].filter(u => {
-        const prev = traders.find(t => t.uid === u);
-        return prev && prev.positions.length > 0;
-      }));
-      const newPositionTraders = new Set([...positionUids].filter(u => !prevPositionUids.has(u)));
-
-      const allNew = new Set([...newOnes, ...newPositionTraders]);
-      if (allNew.size > 0) {
-        setNewUids(allNew);
-        if (soundEnabled) playAlert();
-        setTimeout(() => setNewUids(new Set()), 10000);
+      const r = await fetch("/api/real-traders");
+      if(!r.ok) throw new Error("Failed");
+      const data: RealTrader[] = await r.json();
+      const cur = new Set(data.map(t=>t.uid));
+      const posUids = new Set(data.filter(t=>t.positions.length>0).map(t=>t.uid));
+      const prevPos = new Set([...prevRef.current].filter(u=>traders.find(t=>t.uid===u)?.positions.length));
+      const allNew = new Set([...[...cur].filter(u=>prevRef.current.size>0&&!prevRef.current.has(u)),...[...posUids].filter(u=>!prevPos.has(u))]);
+      if(allNew.size>0){ setNewUids(allNew); if(sound) playAlert(); setTimeout(()=>setNewUids(new Set()),10000); }
+      prevRef.current = cur;
+      setTraders(data); setUpdated(new Date());
+      if(autoAlert && data.length>0) {
+        fetch("/api/signals/auto-alert",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({traders:data,filters:{minRoi,minWinRate:minWr,maxDrawdown:maxDd,autoAlertEnabled:true}})})
+          .then(r=>r.json()).then(d=>{ if(d.alertsSent>0){ setAlertStatus(`📱 ${d.alertsSent} alert${d.alertsSent>1?"s":""} sent`); setTimeout(()=>setAlertStatus(""),8000); }}).catch(()=>{});
       }
+    } catch(e){ setError(String(e)); }
+    finally{ setLoading(false); }
+  },[sound,autoAlert,minRoi,minWr,maxDd,traders]);
 
-      prevUidsRef.current = currentUids;
-      setTraders(data);
-      setLastUpdated(new Date());
+  useEffect(()=>{load();},[]);
+  useEffect(()=>{ if(timerRef.current) clearInterval(timerRef.current); if(autoRefresh) timerRef.current=setInterval(()=>load(true),60000); return()=>{ if(timerRef.current) clearInterval(timerRef.current); }; },[autoRefresh,load]);
 
-      // Auto-alert: send Telegram for any new positions matching filters
-      if (autoAlert) {
-        fetch("/api/signals/auto-alert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            traders: data,
-            filters: { minRoi, minWinRate, maxDrawdown, autoAlertEnabled: true },
-          }),
-        }).then(r => r.json()).then(d => {
-          if (d.alertsSent > 0) {
-            setAlertStatus(`📱 ${d.alertsSent} new alert${d.alertsSent > 1 ? "s" : ""} sent to Telegram`);
-            setTimeout(() => setAlertStatus(""), 8000);
-          }
-        }).catch(() => {});
-      }
-    } catch (e) {
-      setError(String(e));
-    } finally {
-      setLoading(false);
-    }
-  }, [soundEnabled, traders]);
-
-  useEffect(() => { load(); }, []);
-
-  // Auto-refresh every 60s
-  useEffect(() => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    if (autoRefresh) {
-      timerRef.current = setInterval(() => load(true), 60000);
-    }
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, [autoRefresh, load, autoAlert, minRoi, minWinRate, maxDrawdown]);
-
-  const filtered = traders
-    .filter(t => sourceFilter === "ALL" || t.source === sourceFilter)
-    .filter(t => t.roi >= minRoi)
-    .filter(t => t.winRate === 0 || t.winRate >= minWinRate)
-    .filter(t => t.maxDrawdown == null || t.maxDrawdown <= maxDrawdown)
-    .filter(t => !onlyPositions || t.positions.length > 0);
-
-  const withPositions = traders.filter(t => t.positions.length > 0).length;
-  const totalPositions = traders.reduce((s, t) => s + t.positions.length, 0);
-
-  const card: React.CSSProperties = { background: "var(--bg-card)", border: "1px solid var(--border)", borderRadius: 12 };
-  const filterInp: React.CSSProperties = { background: "var(--bg-input)", border: "1px solid var(--border)", borderRadius: 8, padding: "6px 10px", color: "var(--text)", fontSize: 12, width: 70 };
+  const filtered = traders.filter(t=>src==="ALL"||t.source===src).filter(t=>t.roi>=minRoi).filter(t=>t.winRate===0||t.winRate>=minWr).filter(t=>t.maxDrawdown==null||t.maxDrawdown<=maxDd).filter(t=>!posOnly||t.positions.length>0);
+  const withPos = traders.filter(t=>t.positions.length>0).length;
+  const totalPos = traders.reduce((s,t)=>s+t.positions.length,0);
 
   return (
-    <div style={{ padding: 24, maxWidth: 1200, margin: "0 auto" }}>
-      {/* Header */}
-      <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap", gap: 12 }}>
+    <div className="page">
+      <div className="page-header" style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:12}}>
         <div>
-          <h1 style={{ color: "var(--text)", fontSize: 22, fontWeight: 600, margin: 0 }}>Live Signals</h1>
-          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 4 }}>
-            Real top traders from Binance & Bybit. Auto-refreshes every 60s.
-            {lastUpdated && <span style={{ color: "var(--text-faint)" }}> Last: {lastUpdated.toLocaleTimeString()}</span>}
-          {alertStatus && <span style={{ color: "#a78bfa", fontWeight: 600 }}> · {alertStatus}</span>}
+          <h1 className="page-title">Live Signals</h1>
+          <p className="page-sub">
+            Real top traders from Binance & Bybit leaderboards
+            {updated&&<span style={{color:"var(--text-faint)"}}> · {updated.toLocaleTimeString()}</span>}
+            {alertStatus&&<span style={{color:"var(--purple)",fontWeight:600}}> · {alertStatus}</span>}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <button onClick={() => setShowHistory(true)}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text-muted)", fontSize: 13, cursor: "pointer" }}>
-            📋 History
-          </button>
-          <button onClick={() => setSoundEnabled(s => !s)}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: soundEnabled ? "rgba(59,130,246,0.1)" : "transparent", color: soundEnabled ? "var(--accent)" : "var(--text-faint)", fontSize: 13, cursor: "pointer" }}>
-            {soundEnabled ? "🔊 Sound On" : "🔇 Sound Off"}
-          </button>
-          <button onClick={() => setAutoRefresh(a => !a)}
-            style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${autoRefresh ? "rgba(22,199,132,0.4)" : "var(--border)"}`, background: autoRefresh ? "rgba(22,199,132,0.08)" : "transparent", color: autoRefresh ? "var(--profit)" : "var(--text-faint)", fontSize: 13, cursor: "pointer" }}>
-            {autoRefresh ? "⟳ Auto On" : "⟳ Auto Off"}
-          </button>
-          <button onClick={() => setAutoAlert(a => !a)}
-            style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${autoAlert ? "rgba(139,92,246,0.4)" : "var(--border)"}`, background: autoAlert ? "rgba(139,92,246,0.08)" : "transparent", color: autoAlert ? "#a78bfa" : "var(--text-faint)", fontSize: 13, cursor: "pointer" }}>
-            {autoAlert ? "🤖 Auto-Alert On" : "🤖 Auto-Alert Off"}
-          </button>
-          <button onClick={() => load()} disabled={loading}
-            style={{ padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", fontSize: 13, cursor: "pointer", opacity: loading ? 0.5 : 1 }}>
-            ↻ Refresh
-          </button>
+        <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+          <button onClick={()=>setShowHist(true)} className="btn btn-ghost" style={{fontSize:12}}>📋 History</button>
+          <button onClick={()=>setSound(s=>!s)} className={`btn ${sound?"btn-ghost":""}`} style={{fontSize:12,opacity:sound?1:0.5}}>{sound?"🔊":"🔇"}</button>
+          <button onClick={()=>setAutoRefresh(a=>!a)} className="btn btn-ghost" style={{fontSize:12,color:autoRefresh?"var(--profit)":"var(--text-faint)",borderColor:autoRefresh?"rgba(0,212,160,0.3)":"var(--border)"}}>⟳ {autoRefresh?"Auto":"Manual"}</button>
+          <button onClick={()=>setAutoAlert(a=>!a)} className="btn btn-ghost" style={{fontSize:12,color:autoAlert?"var(--purple)":"var(--text-faint)",borderColor:autoAlert?"rgba(167,139,250,0.3)":"var(--border)"}}>🤖 {autoAlert?"Alert On":"Alert Off"}</button>
+          <button onClick={()=>load()} disabled={loading} className="btn btn-primary" style={{fontSize:12}}>↻ Refresh</button>
         </div>
       </div>
 
       {/* Stats */}
-      {!loading && traders.length > 0 && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 10, marginBottom: 20 }}>
-          {[
-            { l: "Traders", v: traders.length },
-            { l: "With Positions", v: withPositions },
-            { l: "Live Positions", v: totalPositions },
-            { l: "Binance", v: traders.filter(t => t.source === "BINANCE").length },
-            { l: "Bybit", v: traders.filter(t => t.source !== "BINANCE").length },
-          ].map(s => (
-            <div key={s.l} style={{ ...card, padding: "10px 14px" }}>
-              <p style={{ color: "var(--text-faint)", fontSize: 10, textTransform: "uppercase", margin: 0 }}>{s.l}</p>
-              <p style={{ color: "var(--text)", fontSize: 20, fontWeight: 600, margin: "3px 0 0" }}>{s.v}</p>
-            </div>
+      {!loading&&traders.length>0&&(
+        <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
+          {[["Traders",traders.length],["With Positions",withPos],["Live Positions",totalPos],["Binance",traders.filter(t=>t.source==="BINANCE").length],["Bybit",traders.filter(t=>t.source!=="BINANCE").length]].map(([l,v])=>(
+            <div key={l} className="stat-card"><p className="stat-label">{l}</p><p className="stat-value">{v}</p></div>
           ))}
         </div>
       )}
 
       {/* Filters */}
-      <div style={{ ...card, padding: "14px 16px", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-        <div style={{ display: "flex", gap: 4, background: "var(--bg)", padding: 3, borderRadius: 8, border: "1px solid var(--border)" }}>
-          {(["ALL", "BINANCE", "BYBIT", "BYBIT_COPY"] as const).map(f => (
-            <button key={f} onClick={() => setSourceFilter(f)}
-              style={{ padding: "5px 12px", borderRadius: 6, border: "none", fontSize: 11, cursor: "pointer", background: sourceFilter === f ? "var(--accent)" : "transparent", color: sourceFilter === f ? "#fff" : "var(--text-faint)", fontWeight: sourceFilter === f ? 600 : 400 }}>
-              {f === "BYBIT_COPY" ? "COPY" : f}
+      <div className="card" style={{padding:"14px 18px",marginBottom:16,display:"flex",gap:12,alignItems:"center",flexWrap:"wrap"}}>
+        <div style={{display:"flex",gap:3,background:"var(--bg)",padding:3,borderRadius:9,border:"1px solid var(--border)"}}>
+          {(["ALL","BINANCE","BYBIT","BYBIT_COPY"] as const).map(f=>(
+            <button key={f} onClick={()=>setSrc(f)} style={{padding:"5px 12px",borderRadius:7,border:"none",fontSize:11,cursor:"pointer",background:src===f?"var(--accent)":"transparent",color:src===f?"#fff":"var(--text-faint)",fontWeight:src===f?600:400,transition:"all 0.15s"}}>
+              {f==="BYBIT_COPY"?"COPY":f}
             </button>
           ))}
         </div>
-
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
-          Min ROI %
-          <input type="number" value={minRoi} onChange={e => setMinRoi(+e.target.value)} style={filterInp} />
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Min ROI %<input type="number" value={minRoi} onChange={e=>setMinRoi(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Win Rate %<input type="number" value={minWr} onChange={e=>setMinWr(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Max DD %<input type="number" value={maxDd} onChange={e=>setMaxDd(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
+        <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"var(--text-muted)"}}>
+          <input type="checkbox" checked={posOnly} onChange={e=>setPosOnly(e.target.checked)} />Live positions only
         </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
-          Min Win Rate %
-          <input type="number" value={minWinRate} onChange={e => setMinWinRate(+e.target.value)} style={filterInp} />
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--text-muted)" }}>
-          Max Drawdown %
-          <input type="number" value={maxDrawdown} onChange={e => setMaxDrawdown(+e.target.value)} style={filterInp} />
-        </label>
-        <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: "var(--text-muted)" }}>
-          <input type="checkbox" checked={onlyPositions} onChange={e => setOnlyPositions(e.target.checked)} />
-          Positions only
-        </label>
-        <span style={{ color: "var(--text-faint)", fontSize: 12, marginLeft: "auto" }}>{filtered.length} traders</span>
+        <span style={{color:"var(--text-faint)",fontSize:12,marginLeft:"auto"}}>{filtered.length} traders</span>
       </div>
 
-      {/* Content */}
       {loading ? (
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, padding: 60 }}>
-          <Spinner size="lg" />
-          <p style={{ color: "var(--text-muted)", fontSize: 13 }}>Fetching live data from Binance & Bybit leaderboards…</p>
+        <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:12,padding:80}}>
+          <Spinner size="lg"/>
+          <p style={{color:"var(--text-muted)",fontSize:13}}>Fetching live data from Binance & Bybit…</p>
         </div>
       ) : error ? (
-        <div style={{ ...card, padding: 40, textAlign: "center" }}>
-          <p style={{ color: "var(--loss)", margin: "0 0 12px" }}>{error}</p>
-          <button onClick={() => load()} style={{ padding: "8px 16px", borderRadius: 8, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", fontSize: 13, cursor: "pointer" }}>Retry</button>
+        <div className="card" style={{padding:40,textAlign:"center"}}>
+          <p style={{color:"var(--loss)",marginBottom:12}}>{error}</p>
+          <button onClick={()=>load()} className="btn btn-ghost">Retry</button>
         </div>
-      ) : filtered.length === 0 ? (
-        <div style={{ ...card, padding: 40, textAlign: "center" }}>
-          <p style={{ color: "var(--text-muted)", margin: 0 }}>No traders match your filters.</p>
-        </div>
+      ) : filtered.length===0 ? (
+        <div className="card" style={{padding:40,textAlign:"center"}}><p style={{color:"var(--text-muted)"}}>No traders match your filters.</p></div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {filtered.map(t => (
-            <TraderCard
-              key={`${t.source}-${t.uid}`}
-              trader={t}
-              isNew={newUids.has(t.uid)}
-              onSelect={pos => setSelected({ pos, trader: t })}
-            />
-          ))}
+        <div style={{display:"flex",flexDirection:"column",gap:8}}>
+          {filtered.map(t=><TraderCard key={`${t.source}-${t.uid}`} trader={t} isNew={newUids.has(t.uid)} onSelect={pos=>setSel({pos,trader:t})} />)}
         </div>
       )}
 
-      {/* Modals */}
-      {selected && <RiskCalc position={selected.pos} trader={selected.trader} onClose={() => setSelected(null)} />}
-      {showHistory && <HistoryPanel onClose={() => setShowHistory(false)} />}
+      {sel&&<RiskCalc pos={sel.pos} trader={sel.trader} onClose={()=>setSel(null)} />}
+      {showHist&&<HistoryPanel onClose={()=>setShowHist(false)} />}
     </div>
   );
 }
