@@ -1,3 +1,4 @@
+import { scoreSignal } from "@/lib/aiScoring";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
@@ -198,6 +199,13 @@ export async function GET() {
 
   const all = [...binance, ...bybitCopy, ...bybit]
     .filter(t => t.roi !== 0 || t.pnl !== 0)
+    .map(t => ({
+      ...t,
+      positions: t.positions.map(p => ({
+        ...p,
+        aiScore: scoreSignal(t, p),
+      })),
+    }))
     .sort((a, b) => b.roi - a.roi)
     .slice(0, 40);
 

@@ -7,7 +7,9 @@ import { useTheme } from "@/context/ThemeContext";
 
 const NAV = [
   { href:"/dashboard",    label:"Dashboard",     icon:"⬛" },
+  { href:"/feed",         label:"Live Feed",     icon:"⚡" },
   { href:"/signals",      label:"Signals",       icon:"📡" },
+  { href:"/journal",      label:"Journal",       icon:"📓" },
   { href:"/copy-trading", label:"Copy Trading",  icon:"⬡" },
   { href:"/ai-trading",   label:"AI Trading",    icon:"◉" },
   { href:"/portfolio",    label:"Portfolio",     icon:"◈" },

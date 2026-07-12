@@ -205,7 +205,7 @@ export default function SignalsPage() {
   const [sel, setSel] = useState<{pos:RealPosition;trader:RealTrader}|null>(null);
   const [showHist, setShowHist] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
-  const [autoAlert, setAutoAlert] = useState(false);
+  const [autoAlert, setAutoAlert] = useState(true);
   const [sound, setSound] = useState(true);
   const [alertStatus, setAlertStatus] = useState("");
   const [updated, setUpdated] = useState<Date|null>(null);
@@ -215,6 +215,7 @@ export default function SignalsPage() {
   const [maxDd, setMaxDd] = useState(100);
   const [src, setSrc] = useState<"ALL"|"BINANCE"|"BYBIT"|"BYBIT_COPY">("ALL");
   const [posOnly, setPosOnly] = useState(false);
+  const [minScore, setMinScore] = useState(60);
   const prevRef = useRef<Set<string>>(new Set());
   const timerRef = useRef<any>(null);
 
@@ -287,6 +288,7 @@ export default function SignalsPage() {
         <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Min ROI %<input type="number" value={minRoi} onChange={e=>setMinRoi(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
         <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Win Rate %<input type="number" value={minWr} onChange={e=>setMinWr(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
         <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Max DD %<input type="number" value={maxDd} onChange={e=>setMaxDd(+e.target.value)} className="input" style={{width:65,marginLeft:4}} /></label>
+        <label style={{display:"flex",alignItems:"center",gap:6,fontSize:12,color:"var(--text-muted)"}}>Min Score<input type="number" min={0} max={100} value={minScore} onChange={e=>setMinScore(+e.target.value)} className="input" style={{width:60,marginLeft:4}} /></label>
         <label style={{display:"flex",alignItems:"center",gap:8,cursor:"pointer",fontSize:12,color:"var(--text-muted)"}}>
           <input type="checkbox" checked={posOnly} onChange={e=>setPosOnly(e.target.checked)} />Live positions only
         </label>
